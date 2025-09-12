@@ -33,8 +33,22 @@ INCLUDED LIBRARIES
 #include <Arduino.h>
 #include <elapsedMillis.h>            //Creates timer objects that are more convenient for non-blocking timing than millis()
 #include <AccelStepper.h>             //Controls the stepper motors
+// ---- FastLED configuration (non-logic tweaks for ESP32 stability) ----
+// Use RMT driver explicitly for WS2812B timing on ESP32.
+// (Removed FASTLED_RMT_BUILTIN_DRIVER due to incompatibility with FastLED 3.10.2 on current ESP32 core)
+// (FASTLED_ESP32_I2S attempted but removed due to unresolved I2S linker symbols with current FastLED/core combo)
+// Optionally disable interrupts during show to avoid BLE jitter corrupting frames.
+#ifndef FASTLED_ALLOW_INTERRUPTS
+#define FASTLED_ALLOW_INTERRUPTS 0
+#endif
+// Provide a diagnostic boot pattern toggle (off by default).
+#ifndef SG_FASTLED_DIAG_BOOT
+#define SG_FASTLED_DIAG_BOOT 0
+#endif
 #include <FastLED.h>                  //Controls the RGB LEDs
 #include <OneButtonTiny.h>            //Button management and debouncing
+#include <NimBLEDevice.h>             // Ensure NimBLE core available for BLEConfigServer
+#include "BLEConfigServer.h"          // BLE configuration server (modular config service)
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -121,6 +135,47 @@ Useful values and limits for defining how the sand garden will behave. In most c
 #define MAX_BRIGHTNESS   40          //Brightness values are 8-bit for a max of 255 (the range is [0-255]), this sets default maximum to 40 out of 255.
 #define LED_FADE_PERIOD  1000        //Amount of time in milliseconds it takes for LEDs to fade on and off.
 
+//Struct used for storing positions of the axes, as well as storing the values of the joystick.
+struct Positions {
+  int radial;                     //the units for these values are motor steps
+  int angular;                    
+};
+
+// Joystick handling with runtime calibration
+#define JOYSTICK_RAW_MAX       4095
+#define JOYSTICK_TARGET_MID    2048
+#define JOYSTICK_OFFSET_A_FALLBACK   (-256)
+#define JOYSTICK_OFFSET_R_FALLBACK   (-256)
+#define JOYSTICK_DEADZONE_INITIAL    600   // large to suppress movement pre-calibration
+#define JOYSTICK_DEADZONE_CAL        120   // noise band after calibration
+
+static int runtimeOffsetA = JOYSTICK_OFFSET_A_FALLBACK;
+static int runtimeOffsetR = JOYSTICK_OFFSET_R_FALLBACK;
+static int joystickDeadzone = JOYSTICK_DEADZONE_INITIAL;
+// Additional micro deadzone / trim parameters
+static const int JOYSTICK_MICRO_TRIM_BAND = 8;      // raw normalized units inside which we consider for auto-trim (<< main deadzone after calibration)
+static const int JOYSTICK_MANUAL_MOVE_THRESHOLD = 12; // require this magnitude before commanding motion steps
+static const unsigned long JOYSTICK_TRIM_INTERVAL_MS = 4000; // how often we may adjust trim while centered
+static int trimAccumulatorA = 0;
+static int trimAccumulatorR = 0;
+static elapsedMillis sinceLastTrim;
+
+// Forward declaration; implementation placed after BLEConfigServer object definition
+static void calibrateJoystick(unsigned long sampleMillis = 700);
+
+static inline int normalizeJoystick(int raw, int offset, bool invert=false) {
+  int shifted = raw + offset;
+  if (shifted < 0) shifted = 0; if (shifted > JOYSTICK_RAW_MAX) shifted = JOYSTICK_RAW_MAX;
+  int delta = shifted - JOYSTICK_TARGET_MID;
+  if (abs(delta) < joystickDeadzone) return 0;
+  float norm = (float)delta / (float)(JOYSTICK_RAW_MAX - JOYSTICK_TARGET_MID);
+  if (norm > 1.f) norm = 1.f; else if (norm < -1.f) norm = -1.f;
+  int out = (int)(norm * 100.f);
+  if (invert) out = -out;
+  if (out > 100) out = 100; else if (out < -100) out = -100;
+  return out;
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /*
@@ -135,11 +190,7 @@ the gantry through the use of pattern functions.
 AccelStepper stepperAngle(4, MOTORA_IN1_PIN, MOTORA_IN3_PIN, MOTORA_IN2_PIN, MOTORA_IN4_PIN);     //angular axis motor
 AccelStepper stepperRadius(4, MOTORR_IN1_PIN, MOTORR_IN3_PIN, MOTORR_IN2_PIN, MOTORR_IN4_PIN);    //radial axis motor
 
-//Struct used for storing positions of the axes, as well as storing the values of the joystick.
-struct Positions {
-  int radial;                     //the units for these values are motor steps
-  int angular;                    
-};                                
+// (Positions struct moved above for early visibility)
 
 //These variables of type Positions (defined above) are for storing gantry positions and joystick values
 Positions currentPositions;       //store the current positions of the axes in this
@@ -191,6 +242,30 @@ typedef Positions (*PatternFunction)(Positions, bool);
 PatternFunction patterns[] = {pattern_SimpleSpiral, pattern_Cardioids, pattern_WavySpiral, pattern_RotatingSquares, pattern_PentagonSpiral, pattern_HexagonVortex, pattern_PentagonRainbow, pattern_RandomWalk1,
                               pattern_RandomWalk2, pattern_AccidentalButterfly};
 
+// ---------------- BLE Configuration Integration (listener defined later to access globals) ----------------
+static BLEConfigServer bleConfig; // forward object; listener class will be defined after globals
+
+// Now that bleConfig is defined we implement the calibration function which emits a status line.
+static void calibrateJoystick(unsigned long sampleMillis) {
+  unsigned long endAt = millis() + sampleMillis;
+  uint32_t sumA = 0, sumR = 0; uint32_t count = 0;
+  while (millis() < endAt) {
+    sumA += analogRead(JOYSTICK_A_PIN);
+    sumR += analogRead(JOYSTICK_R_PIN);
+    count++;
+    delay(5);
+  }
+  if (count == 0) return;
+  int avgA = (int)(sumA / count);
+  int avgR = (int)(sumR / count);
+  runtimeOffsetA = JOYSTICK_TARGET_MID - avgA;
+  runtimeOffsetR = JOYSTICK_TARGET_MID - avgR;
+  joystickDeadzone = JOYSTICK_DEADZONE_CAL;
+  bleConfig.notifyStatus(String("[CAL] Aavg=") + avgA + " Ravg=" + avgR +
+                         " offA=" + runtimeOffsetA + " offR=" + runtimeOffsetR +
+                         " dz=" + joystickDeadzone);
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /*
@@ -208,6 +283,117 @@ bool autoMode = true;             //tracking if we're in automatic or manual mod
 bool motorsEnabled = true;        //used to track if motor drivers are enabled/disabled. initializes to enabled so the homing sequence can run.
 bool patternSwitched = false;     //used for properly starting patterns from beginning when a new pattern is selected
 int lastPattern = currentPattern; //used with currentPattern to detect pattern switching and set the patternSwitched flag.
+
+// Telemetry cache
+struct TelemetryCache {
+  int joyA = 0;
+  int joyR = 0;
+  int lastSentJoyA = 999; // force first send
+  int lastSentJoyR = 999;
+  uint8_t pattern = 0;
+  bool autoMode = false;
+  bool run = false;
+  uint8_t brightness = 0;
+};
+static TelemetryCache telemetry;
+static elapsedMillis telemetryHeartbeat;
+static const unsigned long TELEMETRY_HEARTBEAT_PERIOD = 15000UL;
+static const uint8_t JOY_DELTA_THRESHOLD = 5;
+
+// Forward declarations for local-state wrappers
+static void setPatternLocal(int p);
+static void setAutoModeLocal(bool m);
+static void setRunLocal(bool r);
+
+
+// Listener implementation responding to remote config writes (now globals are defined)
+class SandGardenConfigListener : public ISGConfigListener {
+public:
+  void onSpeedMultiplierChanged(float newValue) override {
+    float m = constrain(newValue, 0.1f, 3.0f);
+    stepperAngle.setMaxSpeed(MAX_SPEED_A_MOTOR * m);
+    stepperRadius.setMaxSpeed(MAX_SPEED_R_MOTOR * m);
+  }
+  void onCurrentPatternChanged(int newPattern) override {
+    int total = sizeof(patterns)/sizeof(patterns[0]);
+    if (newPattern >= 1 && newPattern <= total) {
+      currentPattern = newPattern;
+      patternSwitched = true; // force restart next loop
+    }
+  }
+  void onAutoModeChanged(bool newAutoMode) override {
+    if (autoMode != newAutoMode) {
+      autoMode = newAutoMode;
+      // Entering manual mode stops pattern run for safety unless already stopped
+      if (!autoMode) {
+        runPattern = false;
+      } else {
+        // In auto mode if run state previously requested start running
+        if (runPattern) patternSwitched = true; // ensure pattern restarts cleanly
+      }
+    }
+  }
+  void onRunStateChanged(bool newRunState) override {
+    if (runPattern != newRunState) {
+      runPattern = newRunState;
+      if (runPattern) {
+        patternSwitched = true; // restart pattern when starting
+      }
+    }
+  }
+};
+static SandGardenConfigListener bleListener;
+
+// Wrapper functions ensure BLE characteristics stay authoritative when local inputs change
+static void setPatternLocal(int p) {
+  int total = sizeof(patterns)/sizeof(patterns[0]);
+  if (p < 1) p = 1; if (p > total) p = total;
+  if (p == currentPattern) return;
+  bleConfig.setCurrentPattern(p); // triggers listener which updates currentPattern & patternSwitched
+  bleConfig.notifyStatus("[PATTERN] id=" + String(p));
+}
+
+static void setAutoModeLocal(bool m) {
+  if (m == autoMode) return;
+  bleConfig.setAutoMode(m); // listener handles side-effects
+  bleConfig.notifyStatus(String("[MODE] mode=") + (m ? "AUTO" : "MANUAL"));
+}
+
+static void setRunLocal(bool r) {
+  if (r == runPattern) return;
+  bleConfig.setRunState(r); // listener updates runPattern
+  bleConfig.notifyStatus(String("[RUN] state=") + (r ? "STARTED" : "STOPPED"));
+}
+
+// Telemetry emission helpers
+static void sendJoystickTelemetry(int a, int r) {
+  // Only send if delta big enough, sign change, or endpoints
+  bool sigChange = (abs(a - telemetry.lastSentJoyA) >= JOY_DELTA_THRESHOLD) || (a == 0 && telemetry.lastSentJoyA != 0) || (abs(a) >= 95 && abs(telemetry.lastSentJoyA) < 95);
+  bool sigChangeR = (abs(r - telemetry.lastSentJoyR) >= JOY_DELTA_THRESHOLD) || (r == 0 && telemetry.lastSentJoyR != 0) || (abs(r) >= 95 && abs(telemetry.lastSentJoyR) < 95);
+  if (!(sigChange || sigChangeR)) return;
+  telemetry.lastSentJoyA = a;
+  telemetry.lastSentJoyR = r;
+  int mag = max(abs(a), abs(r));
+  String line = "JOY a=" + String(a) + " r=" + String(r) + " mag=" + String(mag);
+  bleConfig.notifyTelemetry(line);
+  bleConfig.notifyStatus("[JOY] " + line); // mirrored in status with tag for visibility
+}
+
+static void sendStateTelemetry() {
+  // Aggregate snapshot
+  String msg = "STATE pat=" + String(currentPattern) +
+               " auto=" + String(autoMode ? 1 : 0) +
+               " run=" + String(runPattern ? 1 : 0) +
+               " brt=" + String(FastLED.getBrightness());
+  bleConfig.notifyTelemetry(msg);
+}
+
+static void heartbeatTelemetry() {
+  if (telemetryHeartbeat >= TELEMETRY_HEARTBEAT_PERIOD) {
+    telemetryHeartbeat = 0;
+    bleConfig.notifyTelemetry("HB");
+  }
+}
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -267,6 +453,15 @@ public:
     FastLED.addLeds<WS2812B, LED_DATA_PIN, GRB>(leds, NUM_LEDS);
     FastLED.setBrightness(MAX_BRIGHTNESS);
     FastLED.clear();
+    // Small stabilization delay; helps some ESP32 targets before first show
+    delay(5);
+#if SG_FASTLED_DIAG_BOOT
+    for(int i=0;i<NUM_LEDS;i++) leds[i] = CRGB::Blue;
+    FastLED.show();
+    delay(150);
+    for(int i=0;i<NUM_LEDS;i++) leds[i] = CRGB::Black;
+    FastLED.show();
+#endif
   }
 
   //a proxy function for setting the brightness of the LEDs. This way the class can handle all the LED stuff
@@ -431,15 +626,20 @@ void setup() {
   pinMode(JOYSTICK_A_PIN, INPUT);
   pinMode(JOYSTICK_R_PIN, INPUT);
 
+  // Perform runtime joystick calibration (samples for ~700ms, then tightens deadzone)
+  calibrateJoystick();
+
   //Set up the button.
   //Single press of button is for starting or stopping the current pattern.
   button.attachClick([]() {       //This is called a lambda function. Basically it's a nameless function that runs when the button is single pressed.
-    runPattern = !runPattern;     //this flips the boolean state of the variable. If it's true, this sets to false, if false set to true.
+    setRunLocal(!runPattern);     // route via BLE sync wrapper
+    bleConfig.notifyStatus("[BTN] state=CLICK");
   });
 
   //Attaching an event to the long press of the button. Currently, long pressing the button lets you end the homing process early.
   button.attachLongPressStart([]() {
     buttonLongPressed = true;         
+    bleConfig.notifyStatus("[BTN] state=LONGPRESS");
   });
 
   //set the maximum speeds and accelerations for the stepper motors.
@@ -452,6 +652,9 @@ void setup() {
   FastLED.show();
 
   homeRadius();               //crash home the radial axis. This is a blocking function.
+
+  bleConfig.begin(&bleListener);
+  bleConfig.notifyStatus("Ready");
 }
 
 
@@ -465,8 +668,50 @@ the gantry from the selected pattern functions or from manual mode.
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void loop() {
+  bleConfig.loop(); // service BLE events if needed
+
   //Check to see if the button has been pressed. This has to be called as often as possible to catch button presses.
   button.tick();
+
+  // Always read joystick once per outer loop and emit telemetry (throttled inside helper)
+  joystickValues = readJoystick();
+
+  // Adaptive micro-trim: if both axes are within a very small band, gradually nudge runtime offsets toward eliminating residual bias.
+  if (abs(joystickValues.angular) <= JOYSTICK_MICRO_TRIM_BAND && abs(joystickValues.radial) <= JOYSTICK_MICRO_TRIM_BAND) {
+    // Accumulate raw readings' sign to see persistent bias; reuse raw reads for better resolution
+    int rawA = analogRead(JOYSTICK_A_PIN);
+    int rawR = analogRead(JOYSTICK_R_PIN);
+    int deltaA = (rawA + runtimeOffsetA) - JOYSTICK_TARGET_MID; // residual after offset
+    int deltaR = (rawR + runtimeOffsetR) - JOYSTICK_TARGET_MID;
+    // accumulate small deltas (clamped) so noise cancels, bias builds
+    trimAccumulatorA += constrain(deltaA, -6, 6);
+    trimAccumulatorR += constrain(deltaR, -6, 6);
+    if (sinceLastTrim > JOYSTICK_TRIM_INTERVAL_MS) {
+      // Only adjust if accumulated bias exceeds a threshold
+      const int ADJUST_THRESHOLD = 80; // aggregate raw-sample units
+      bool adjusted = false;
+      if (abs(trimAccumulatorA) > ADJUST_THRESHOLD) {
+        runtimeOffsetA -= trimAccumulatorA / 40; // scale down adjustment
+        trimAccumulatorA = 0;
+        adjusted = true;
+      }
+      if (abs(trimAccumulatorR) > ADJUST_THRESHOLD) {
+        runtimeOffsetR -= trimAccumulatorR / 40;
+        trimAccumulatorR = 0;
+        adjusted = true;
+      }
+      if (adjusted) {
+        bleConfig.notifyStatus(String("[TRIM] offA=") + runtimeOffsetA + " offR=" + runtimeOffsetR);
+      }
+      sinceLastTrim = 0;
+    }
+  } else {
+    // If user is actively moving, decay accumulators so we don't adapt during motion
+    trimAccumulatorA = trimAccumulatorA / 2;
+    trimAccumulatorR = trimAccumulatorR / 2;
+    sinceLastTrim = 0; // reset timer so trimming waits for a quiet period
+  }
+  sendJoystickTelemetry(joystickValues.angular, joystickValues.radial);
 
   //if the runPattern flag is set to true, we need to start updating target positions for the controller. run the appropriate pattern!
   if (runPattern) {
@@ -486,19 +731,24 @@ void loop() {
       display.setBrightness(MAX_BRIGHTNESS);
       display.indicatePattern(255);             //pattern 255 is used to indicate manual drawing mode on the LEDs
 
-      joystickValues = readJoystick();          //read joystick values and store them in joystickValues struct
+      // (joystick already read at top of loop; telemetry already sent)
       //first check if an angular change is requested by joystick input
-      if (joystickValues.angular < 0) {
+      int angCmd = joystickValues.angular;
+      int radCmd = joystickValues.radial;
+      if (abs(angCmd) < JOYSTICK_MANUAL_MOVE_THRESHOLD) angCmd = 0;
+      if (abs(radCmd) < JOYSTICK_MANUAL_MOVE_THRESHOLD) radCmd = 0;
+
+      if (angCmd < 0) {
         targetPositions.angular = currentPositions.angular - (STEPS_PER_MOTOR_REV / 100);    //add steps to the target position
-      } else if (joystickValues.angular > 0) {
+      } else if (angCmd > 0) {
         targetPositions.angular = currentPositions.angular + (STEPS_PER_MOTOR_REV / 100);
       } else {
         targetPositions.angular = currentPositions.angular;   //otherwise maintain current position
       }
       //next check if a radial change is requested by joystick input
-      if (joystickValues.radial < 0) {
+      if (radCmd < 0) {
         targetPositions.radial = currentPositions.radial - (MAX_R_STEPS / 100);
-      } else if (joystickValues.radial > 0) {
+      } else if (radCmd > 0) {
         targetPositions.radial = currentPositions.radial + (MAX_R_STEPS / 100);
       } else {
         targetPositions.radial = currentPositions.radial;
@@ -551,40 +801,45 @@ void loop() {
       motorsEnabled = false;
     }
 
-    //read the joystick state so that it can be used in the following if statements
-    joystickValues = readJoystick();
+  // joystick already read at top of loop
 
     if (!autoMode) {                                        //This means we're not in automatic mode, so we are in manual drawing mode.
       display.indicatePattern(255);                         //The value 255 is used to represent manual mode on the LEDs.
       display.fadePixels(LED_FADE_PERIOD, MAX_BRIGHTNESS);  //update the brightness of the LEDs to fade them in and out over time
 
       if (lastJoystickUpdate >= 200 && (joystickValues.angular >= 90 || joystickValues.angular <= -90)) {  //the joystick is pushed all the way to the right or left
-        autoMode = true;                                    //switch to automatic mode so that we can do pattern selection
+        setAutoModeLocal(true);                              //switch to automatic mode so that we can do pattern selection
         lastJoystickUpdate = 0;                             //reset the joystick update timer
       }
     } else {                                                //We're in automatic mode, which means it's time to select a pattern.
-      display.indicatePattern(currentPattern);
+  display.indicatePattern(currentPattern);
       display.fadePixels(LED_FADE_PERIOD, MAX_BRIGHTNESS);  
+    // telemetry already emitted at top of loop
 
       if (lastJoystickUpdate >= 200 && joystickValues.radial >= 90) {                              //if it's been 200ms since last joystick update and joystick is pushed all the way up
-        currentPattern++;                                                                          //increment pattern number by 1
-        if ((currentPattern == 255) || (currentPattern > sizeof(patterns)/sizeof(patterns[0]))) {  //if currentPattern equals 255 or the number of elements in the pattern array
-          currentPattern = 1;                               //this handles wrapping back around to beginning of patterns.
-        }
+        setPatternLocal(currentPattern + 1);                                                     //increment pattern number via BLE sync helper
         lastJoystickUpdate = 0;                             //reset the timer that tracks the last time the joystick was updated
       } else if (lastJoystickUpdate >= 200 && joystickValues.radial <= -90) {                      //if it's been 200ms since last update and joystick is pushed all the way down
-        currentPattern--;
-        if (currentPattern < 1) {
-          currentPattern = sizeof(patterns)/sizeof(patterns[0]);   //this handles wrapping up to the top end of the array that holds the patterns
-        }
+        setPatternLocal(currentPattern - 1);
         lastJoystickUpdate = 0;
 
       } else if (lastJoystickUpdate >= 200 && (joystickValues.angular >= 90 || joystickValues.angular <= -90)) {  //if the joystick was pushed all the way to the left
-        autoMode = false;                                                                                         //switch to manual mode
+        setAutoModeLocal(false);                                                                                  //switch to manual mode
         lastJoystickUpdate = 0;   
       }   
     }
     #pragma endregion SelectionMode
+  }
+
+  // Periodic telemetry heartbeat
+  heartbeatTelemetry();
+
+  // Occasional aggregate snapshot when key state changed
+  static uint8_t lastPatSent = 0; static bool lastAuto = !autoMode; static bool lastRun = !runPattern; static uint8_t lastBrt = 0;
+  uint8_t brt = FastLED.getBrightness();
+  if (lastPatSent != currentPattern || lastAuto != autoMode || lastRun != runPattern || abs((int)brt - (int)lastBrt) >= 16) {
+    sendStateTelemetry();
+    lastPatSent = currentPattern; lastAuto = autoMode; lastRun = runPattern; lastBrt = brt;
   }
 }
 
@@ -611,13 +866,13 @@ Miscellaneous functions. Currently this region only includes the function for re
  * measurement noise and prevent unintended small movements.
  */
 Positions readJoystick(void) {
-  Positions values;
-  values.angular = map(analogRead(JOYSTICK_A_PIN), 0, 1023, -100, 100);
-  values.radial = map(analogRead(JOYSTICK_R_PIN), 0, 1023, 100, -100);
-
-  if (values.angular <= 5 && values.angular >= -5) values.angular = 0;   //apply a deadband to account for measurement error near center.
-  if (values.radial <= 5 && values.radial >= -5) values.radial = 0;
-  return values;
+  int rawA = analogRead(JOYSTICK_A_PIN); // 0..4095
+  int rawR = analogRead(JOYSTICK_R_PIN);
+  Positions out;
+  // Use the runtime-calibrated offsets (set during calibrateJoystick()) rather than the old static macros.
+  out.angular = normalizeJoystick(rawA, runtimeOffsetA, false); // -100..100
+  out.radial  = normalizeJoystick(rawR, runtimeOffsetR, true);  // invert radial for existing semantics
+  return out;
 }
 
 #pragma endregion MiscFunctions
@@ -716,6 +971,13 @@ void moveToPosition(long angularSteps, long radialSteps) {
     stepperAngle.runSpeedToPosition();                             //constant speed move, unless the target position is reached.
     stepperRadius.runSpeedToPosition();
     button.tick();                                                 //This blocking loop can potentially last a long time, so we have to check the button state.
+    // Poll joystick at 10Hz during blocking move to keep telemetry flowing in automatic runs
+    static unsigned long lastJoyPoll = 0; unsigned long now = millis();
+    if (now - lastJoyPoll >= 100) {
+      lastJoyPoll = now;
+      Positions tmp = readJoystick();
+      sendJoystickTelemetry(tmp.angular, tmp.radial);
+    }
   }
 }
 
@@ -822,7 +1084,7 @@ int calcRadialSteps(int current, int target, int angularOffsetSteps) {
  * 
  * @return Positions The updated current positions of both the angular and radial axes after the motion has been executed.
  *
- * This function wraps the angular target around the 360-degree transition point and calculates the shortest path 
+ * This function wraps the angular target around the 360-degree/0-degree transition point and calculates the shortest path 
  * to the target. It also ensures that the radial position stays within its limits, compensates for the mechanical 
  * relationship between the axes, and updates the current position after the move. If the move is interrupted (e.g., 
  * by a long joystick press), the current position tracking adjusts accordingly.
@@ -914,7 +1176,7 @@ Positions drawLine(Positions point0, Positions point1, Positions current, int re
   static float stepover = 0;                          //how far to move along x-axis for interpolating along line
   static float m = 0;                                 //the slope of the line (y = mx + b)
   static float denom = 0;                             //the denominator in the slope calculation (x1 - x0)
-  static float b = 0;                                 //the y-intercept of the line (y = mx + b)
+  static float b = 0;                                 //the y-intercept of the line (y = mx + b, so b = y - mx. Use point0 values for y and x
   static bool pointsRotated = false;                  //used to indicate if points have been rotated to deal with vertical lines and need to be rotated back on output.
 
   Positions p0 = point0, p1 = point1;                 //containers for the points (we may need to modify their values to deal with vertical lines)
@@ -963,7 +1225,7 @@ Positions drawLine(Positions point0, Positions point1, Positions current, int re
       //for a line to be close to the center to fine tune how well straight lines are drawn.
       numPoints = 100;
     } 
-    //This line doesn't come really close to intersecting the origin, so we'll handle it differently.
+    //This line doesn't come really close to intercepting the origin, so we'll handle it differently.
   
     //divide one axis into the number of segments required by resolution, up to a maximum of the length of the array they'll be stored in.
     //defining all of these values as static means the value will persist between function calls, but also means I have to reset them
@@ -1010,7 +1272,7 @@ Positions drawLine(Positions point0, Positions point1, Positions current, int re
 
     //we need to set the newLine flag to false so that the next time this function is called,
     //we can output the points along the line rather than recalculating the points.
-    newLine = false;       //later in the program, we have to reset this to true once the last line of the point is returned.
+    newLine = false;       //later in the program, we have to reset this to true once the last point in the line of code is returned.
     reset = false;
     outNum = 0;            //need to reset this to 0 so we can start outputting the points, starting from the first one.
     pointsRotated = false;
@@ -1066,7 +1328,7 @@ Positions drawLine(Positions point0, Positions point1, Positions current, int re
  * Position center = {3000, convertDegreesToSteps(60)};
  * nGonGenerator(vertices, numberVertices, center, 2000, 0.0);
  */
-void nGonGenerator(Positions *pointArray, int numPoints, Positions centerPoint, int radius, float rotationDeg = 0.0) {
+void nGonGenerator(Positions *pointArray, int numPoints, Positions centerPoint, int radius, float rotationDeg) {
   //*pointArry is the pointer to the array that will be built out.
   //numPoints is the length of that array (equal to number of desired vertices).
   //centerPoint is the center point of the polygon (supply as a Position struct)
@@ -1367,7 +1629,7 @@ This region of code contains the different pattern generating functions.
  * the spiral will continue from there. The pattern adjusts the radial and angular steps incrementally and reverses 
  * direction when the radial boundaries are reached.
  */
-Positions pattern_SimpleSpiral(Positions current, bool restartPattern = false) {                      
+Positions pattern_SimpleSpiral(Positions current, bool restartPattern) {                      
   Positions target;                                        //This is where we'll store the value of the next target position.
 
   const float angleDivisions = 100.0;                      //Going to divide a full revolution into 100ths. "const" because this never changes.
@@ -1411,7 +1673,7 @@ Positions pattern_SimpleSpiral(Positions current, bool restartPattern = false) {
  * @note This pattern works best after a reset, as it always operates in relative coordinates. If started after running another pattern, 
  * the results may vary, since it builds upon the current position of the gantry.
  */
-Positions pattern_Cardioids(Positions current, bool restartPattern = false) {                      
+Positions pattern_Cardioids(Positions current, bool restartPattern) {                      
   Positions target;
   const int radialStep = ((MAX_R_STEPS) / 8);       //we're going to take huge steps radially (this defaults to 1/8th of the radial axis)
   static int direction = 1;                         //1 means counterclockwise, -1 means clockwise
@@ -1457,7 +1719,7 @@ Positions pattern_Cardioids(Positions current, bool restartPattern = false) {
  * @note This pattern adds a sine wave to the radial position to create the wavy effect. You can modify the amplitude and frequency 
  * of the wave to achieve different variations of the pattern. The radial movement is reversed when the limits of the radial axis are reached.
  */
-Positions pattern_WavySpiral(Positions current, bool restartPattern = false) {
+Positions pattern_WavySpiral(Positions current, bool restartPattern) {
 
   Positions target;                                  //This is where we'll store the value of the next target position.
 
@@ -1503,12 +1765,12 @@ Positions pattern_WavySpiral(Positions current, bool restartPattern = false) {
  * @note This pattern relies on a static variable to track the current step in the drawing process and uses the drawLine function 
  * to move between the vertices of the square. After each square is completed, the vertices are rotated by 10 degrees for the next square.
  */
-Positions pattern_RotatingSquares(Positions current, bool restartPattern = false) {                
+Positions pattern_RotatingSquares(Positions current, bool restartPattern) {                
   Positions target;             
   static int step = 0;
   static int segments = 20;                         //Use  20 points to approximate a straight line
   static Positions p1, p2, p3, p4;                  //the four vertices of our square
-  static bool firstRun = true;                      //used to track if this is the first time the function is called
+  static bool firstRun = true;
   const int angleShift = convertDegreesToSteps(10); //how much we'll rotate the square
   if (firstRun || restartPattern) {
     p1.angular = 0;                                 //angular position of first point in absolute coordinates
@@ -1567,7 +1829,6 @@ Positions pattern_RotatingSquares(Positions current, bool restartPattern = false
 
 
 
-
 /**
  * @brief Pattern: Pentagon Spiral. Generates the next target position for drawing a growing and shrinking pentagon spiral.
  *
@@ -1586,7 +1847,7 @@ Positions pattern_RotatingSquares(Positions current, bool restartPattern = false
  * recalculated when a complete pentagon is drawn.
  */
 
-Positions pattern_PentagonSpiral(Positions current, bool restartPattern = false) {
+Positions pattern_PentagonSpiral(Positions current, bool restartPattern) {
   Positions target;                                                   //Output position will be stored here
   static int start = 0;                                               //Index to the starting point of the line in the array
   static int end = 1;                                                 //Index to the end point of the line in the array
@@ -1595,7 +1856,7 @@ Positions pattern_PentagonSpiral(Positions current, bool restartPattern = false)
   static Positions vertexList[vertices];                               //construct an array to store the vertices of the polygon
   static int radialStepover = 500;                                    //Amount to change the radius of the polygon each cycle
 
-  if (firstRun || restartPattern) {                                                     //On first function call, construct the polygon vertices
+  if (firstRun || restartPattern) {
     nGonGenerator(vertexList, vertices, {0,0}, 1000, 0.0);             //generate the vertices of the polygon  
     firstRun = false;                                                 //Use already generated points next time this function is called
   }   
@@ -1642,7 +1903,7 @@ Positions pattern_PentagonSpiral(Positions current, bool restartPattern = false)
  * by shifting the angular positions of each vertex. The pattern reverses direction when the radius exceeds 
  * the maximum limit or falls below zero.
  */
-Positions pattern_HexagonVortex(Positions current, bool restartPattern = false) {                 
+Positions pattern_HexagonVortex(Positions current, bool restartPattern) {                 
   Positions target;           
   static int step = 0;                                //using switch case to track steps again
   static int segments = 100;
@@ -1767,7 +2028,7 @@ Positions pattern_HexagonVortex(Positions current, bool restartPattern = false) 
  * as the pentagon appears in different positions. The nGonGenerator and translatePoints functions are used to 
  * generate and move the pentagon.
  */
-Positions pattern_PentagonRainbow(Positions current, bool restartPattern = false) {
+Positions pattern_PentagonRainbow(Positions current, bool restartPattern) {
   Positions target;
   //target = current;               
   static int start = 0;
@@ -1816,7 +2077,7 @@ Positions pattern_PentagonRainbow(Positions current, bool restartPattern = false
  * 
  * @note This pattern moves the gantry using the shortest path between points, leading to random arc-shaped movements.
  */
-Positions pattern_RandomWalk1(Positions current, bool restartPattern = false) {
+Positions pattern_RandomWalk1(Positions current, bool restartPattern) {
   Positions target;
 
   // Generate a random radial position within the bounds of your system.
@@ -1847,7 +2108,7 @@ Positions pattern_RandomWalk1(Positions current, bool restartPattern = false) {
  * 
  * @note The function generates new random points once the gantry reaches the current random target and continues the random walk.
  */
-Positions pattern_RandomWalk2(Positions current, bool restartPattern = false) {
+Positions pattern_RandomWalk2(Positions current, bool restartPattern) {
   Positions target;
   static Positions randomPoint, lastPoint = current;
   static bool makeNewRandomPoint = true;
@@ -1889,7 +2150,7 @@ Positions pattern_RandomWalk2(Positions current, bool restartPattern = false) {
  * @note The pattern adds sine and cosine-based offsets to both the radial and angular positions to create oscillating movements, leading to the butterfly shape. 
  * The amplitude and frequency of the sine and cosine waves can be adjusted for different effects.
  */
-Positions pattern_AccidentalButterfly(Positions current, bool restartPattern = false) {
+Positions pattern_AccidentalButterfly(Positions current, bool restartPattern) {
   //This pattern starts out exactly the same as pattern_SimpleSpiral. The only difference is that after calculating the next position
   //in the spiral, it adds the sine of the current angular position to the radial axis to make a wavy line.
 

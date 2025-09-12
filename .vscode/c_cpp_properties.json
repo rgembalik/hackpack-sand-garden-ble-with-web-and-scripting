@@ -3,7 +3,6 @@
     "configurations": [
         {
             "name": "Arduino",
-            "configurationProvider": "vsciot-vscode.vscode-arduino",
             "compilerPath": "${env:LOCALAPPDATA}\\Arduino15\\packages\\esp32\\tools\\s3-gcc\\2021r2-p5\\bin\\xtensa-esp32s3-elf-g++",
             "compilerArgs": [
                 "-iprefix",
@@ -247,11 +246,29 @@
                 "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\hal\\esp32s3\\include",
                 "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\soc\\include",
                 "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\esp_system\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\esp_timer\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\newlib\\platform_include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\heap\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\freertos\\include\\esp_additions",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\log\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\driver\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\esp_event\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\esp_wifi\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\esp_netif\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\esp_eth\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\tcpip_adapter\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\lwip\\lwip\\src\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\lwip\\port\\esp32\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\lwip\\include\\apps",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\spi_flash\\include",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\esp_hw_support\\include\\soc",
+                "${env:LOCALAPPDATA}\\Arduino15\\packages\\arduino\\hardware\\esp32\\2.0.18-arduino.5\\tools\\sdk\\esp32s3\\include\\bt\\include\\esp32c3\\include",
                 // User libraries
                 "${env:USERPROFILE}\\OneDrive\\Dokumenty\\Arduino\\libraries\\elapsedMillis",
                 "${env:USERPROFILE}\\OneDrive\\Dokumenty\\Arduino\\libraries\\AccelStepper\\src",
                 "${env:USERPROFILE}\\OneDrive\\Dokumenty\\Arduino\\libraries\\FastLED\\src",
                 "${env:USERPROFILE}\\OneDrive\\Dokumenty\\Arduino\\libraries\\OneButton\\src",
+                "${env:USERPROFILE}\\OneDrive\\Dokumenty\\Arduino\\libraries\\NimBLE-Arduino\\src",
                 // Toolchain / standard headers
                 "${env:LOCALAPPDATA}\\Arduino15\\packages\\esp32\\tools\\s3-gcc\\2021r2-p5\\xtensa-esp32s3-elf\\include\\c++\\8.4.0",
                 "${env:LOCALAPPDATA}\\Arduino15\\packages\\esp32\\tools\\s3-gcc\\2021r2-p5\\xtensa-esp32s3-elf\\include\\c++\\8.4.0\\xtensa-esp32s3-elf",

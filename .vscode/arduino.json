@@ -4,6 +4,10 @@
     "board": "arduino:esp32:nano_nora",
     "programmer": "esptool",
     "buildPreferences": [
-        ["compiler.cpp.extra_flags", "-fpermissive"]
-    ]
+        [
+            "compiler.cpp.extra_flags",
+            "-fpermissive"
+        ]
+    ],
+    "port": "COM7"
 }
