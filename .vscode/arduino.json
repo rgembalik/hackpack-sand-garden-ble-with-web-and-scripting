@@ -1,0 +1,6 @@
+{
+    "sketch": "sand-garden.ino",
+    "configuration": "PartitionScheme=default,PinNumbers=default,USBMode=default",
+    "board": "arduino:esp32:nano_nora",
+    "programmer": "esptool"
+}
