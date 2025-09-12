@@ -50,11 +50,19 @@ void BLEConfigServer::begin(ISGConfigListener *listener) {
     NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::READ); // allow a last snapshot read
   _telemetryChar->setValue("TL0");
 
+  // Command characteristic (write-only from client, readable for last command echo/result)
+  _commandChar = _service->createCharacteristic(
+    SG_COMMAND_CHAR_UUID,
+    NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::READ);
+  _commandChar->setValue("READY");
+  _commandChar->setCallbacks(new CommandCallbacks(this));
+
   _service->start();
   NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
   adv->addServiceUUID(_service->getUUID());
   adv->setAppearance(0x0000);              // generic appearance
-  NimBLEDevice::setDeviceName(SG_DEVICE_NAME); // reinforce name (redundant but safe)
+  NimBLEDevice::setDeviceName(SG_DEVICE_NAME); // reinforce name
+  // Start advertising
   adv->start();
 }
 
@@ -157,6 +165,27 @@ void BLEConfigServer::_applyRunWrite(const std::string &valRaw) {
   setRunState(v != 0);
 }
 
+void BLEConfigServer::_applyCommandWrite(const std::string &valRaw) {
+  // Copy & sanitize: trim whitespace, uppercase token (first word)
+  std::string raw = valRaw;
+  // Trim leading/trailing whitespace
+  auto ltrim=[&](std::string &s){ while(!s.empty() && isspace((unsigned char)s.front())) s.erase(s.begin());};
+  auto rtrim=[&](std::string &s){ while(!s.empty() && isspace((unsigned char)s.back())) s.pop_back();};
+  ltrim(raw); rtrim(raw);
+  std::string token = raw;
+  // For future args support: split at first space
+  size_t sp = raw.find(' ');
+  if (sp != std::string::npos) token = raw.substr(0, sp);
+  for(char &c : token) c = toupper((unsigned char)c);
+  if (_commandChar) {
+    // Echo back sanitized token (could also include OK/ERR later)
+    _commandChar->setValue(token);
+  }
+  if (_listener) {
+    _listener->onCommandReceived(String(token.c_str()), valRaw);
+  }
+}
+
 void BLEConfigServer::SpeedCallbacks::onWrite(NimBLECharacteristic *c, NimBLEConnInfo &info) {
   (void)info; // unused
   _parent->_applySpeedWrite(c->getValue());
@@ -175,4 +204,9 @@ void BLEConfigServer::ModeCallbacks::onWrite(NimBLECharacteristic *c, NimBLEConn
 void BLEConfigServer::RunCallbacks::onWrite(NimBLECharacteristic *c, NimBLEConnInfo &info) {
   (void)info;
   _parent->_applyRunWrite(c->getValue());
+}
+
+void BLEConfigServer::CommandCallbacks::onWrite(NimBLECharacteristic *c, NimBLEConnInfo &info) {
+  (void)info;
+  _parent->_applyCommandWrite(c->getValue());
 }
