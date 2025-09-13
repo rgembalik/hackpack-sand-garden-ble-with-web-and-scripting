@@ -67,7 +67,6 @@
           <span x-show="connecting">Connecting...</span>
           <span x-show="connected">Connected</span>
         </button>
-        <button @click="runLedSelfTest()" :disabled="!connected || !chars.command" class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 transition font-medium focus:outline-none focus:ring-2 focus:ring-sg-accent/60 disabled:opacity-40">LED Self-Test</button>
         <button x-show="!connected && device && !connecting" @click="reconnect()" class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 transition font-medium focus:outline-none focus:ring-2 focus:ring-sg-accent/60">Reconnect</button>
       </div>
     </header>
@@ -168,31 +167,6 @@
           <div class="text-sm text-gray-300" x-text="patternMeta[pattern-1].description"></div>
         </div>
 
-        <div class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow" x-data="{ open:true }">
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="text-lg font-semibold">Diagnostics</h2>
-            <button @click="open=!open" class="text-xs text-sg-accent hover:underline" x-text="open ? 'Hide' : 'Show'"></button>
-          </div>
-          <template x-if="open">
-            <div class="space-y-4 text-sm">
-              <p class="text-gray-300 leading-relaxed">Use these buttons to exercise the LED strip without needing serial. If colors do not appear: verify 5V supply, ground continuity, data pin wiring, and that the first pixel is functional. You can also run the multi-phase self-test.</p>
-              <div class="flex flex-wrap gap-2">
-                <button @click="runLedSelfTest()" :disabled="!connected || !chars.command" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40">Self-Test</button>
-                <button @click="ledDirect(255,0,0)" :disabled="!connected || !chars.command" class="px-3 py-1.5 rounded bg-red-700 hover:bg-red-600 disabled:opacity-40">Red</button>
-                <button @click="ledDirect(0,255,0)" :disabled="!connected || !chars.command" class="px-3 py-1.5 rounded bg-green-700 hover:bg-green-600 disabled:opacity-40">Green</button>
-                <button @click="ledDirect(0,0,255)" :disabled="!connected || !chars.command" class="px-3 py-1.5 rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40">Blue</button>
-                <button @click="ledWhite()" :disabled="!connected || !chars.command" class="px-3 py-1.5 rounded bg-gray-200 text-gray-800 hover:bg-white disabled:opacity-40">White</button>
-                <button @click="ledDim()" :disabled="!connected || !chars.command" class="px-3 py-1.5 rounded bg-gray-500 hover:bg-gray-400 text-gray-100 disabled:opacity-40">Dim</button>
-                <button @click="ledOff()" :disabled="!connected || !chars.command" class="px-3 py-1.5 rounded bg-black border border-gray-600 hover:border-gray-400 disabled:opacity-40">Off</button>
-              </div>
-              <div class="flex items-center gap-2 flex-wrap">
-                <label class="text-gray-400 text-xs">HEX Color</label>
-                <input x-model="diagColorHex" placeholder="#FF8800" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs w-28 focus:outline-none focus:ring-2 focus:ring-sg-accent/50" />
-                <button @click="ledHex()" :disabled="!connected || !chars.command" class="px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-xs disabled:opacity-40">Send</button>
-              </div>
-            </div>
-          </template>
-        </div>
       </section>
 
       <!-- Right: Visualizer -->
@@ -239,8 +213,7 @@
         statusMessage:'Idle',
         logs:[],
         device:null, server:null,
-  chars:{ speed:null, pattern:null, status:null, mode:null, run:null, telemetry:null, command:null },
-    diagColorHex:'#FF7A00',
+  chars:{ speed:null, pattern:null, status:null, mode:null, run:null, telemetry:null },
         // Telemetry state
         joy:{a:0,r:0,mag:0}, lastState:{pat:null,auto:null,run:null,brt:null}, heartbeatCount:0,
         patternMeta:[
@@ -306,12 +279,11 @@
             const patternChar = await service.getCharacteristic(PATTERN_UUID);
             const statusChar  = await service.getCharacteristic(STATUS_UUID);
             // Mode/run are optional until firmware updated; wrap in try
-            let modeChar=null, runChar=null, telemetryChar=null, commandChar=null;
+            let modeChar=null, runChar=null, telemetryChar=null;
             try { modeChar = await service.getCharacteristic(MODE_UUID); } catch(_){}
             try { runChar  = await service.getCharacteristic(RUN_UUID); } catch(_){}
             try { telemetryChar = await service.getCharacteristic(TELEMETRY_UUID); } catch(_){ this.log('Telemetry characteristic not found (firmware older?)'); }
-            try { commandChar = await service.getCharacteristic(COMMAND_UUID); } catch(_){ this.log('Command characteristic not found (older firmware)'); }
-            this.chars = { speed: speedChar, pattern: patternChar, status: statusChar, mode: modeChar, run: runChar, telemetry: telemetryChar, command: commandChar };
+            this.chars = { speed: speedChar, pattern: patternChar, status: statusChar, mode: modeChar, run: runChar, telemetry: telemetryChar };
             // Initial reads
             await this.readInitialValues();
             // Notifications
@@ -419,40 +391,12 @@
             catch(e){ this.log('Run write err: '+e.message); }
           }
         },
-        async runLedSelfTest(){
-          if(!this.chars.command){ this.log('Command char unavailable'); return; }
-            this.setStatus('Requesting LED SELFTEST...');
-            await this.sendCommand('SELFTEST');
-        },
-        async sendCommand(cmd){
-          if(!this.chars.command){ this.log('Command char unavailable'); return; }
-          try {
-            const clean = (cmd||'').trim().toUpperCase();
-            await this.chars.command.writeValue(new TextEncoder().encode(clean));
-            this.log('CMD sent: '+clean);
-          } catch(e){ this.log('Command write err: '+e.message); }
-        },
-        async ledDirect(r,g,b){
-          // Clamp & int
-          r=Math.max(0,Math.min(255,Math.round(r)));
-          g=Math.max(0,Math.min(255,Math.round(g)));
-          b=Math.max(0,Math.min(255,Math.round(b)));
-          await this.sendCommand(`LEDDIRECT ${r},${g},${b}`);
-          this.setStatus(`LED -> (${r},${g},${b})`);
-        },
-        async ledOff(){ await this.ledDirect(0,0,0); },
-        async ledWhite(){ await this.ledDirect(255,255,255); },
-        async ledDim(){ await this.ledDirect(30,30,30); },
-        async ledHex(){
-          if(!this.diagColorHex) return;
-            let hex=this.diagColorHex.trim();
-            if(hex.startsWith('#')) hex=hex.slice(1);
-            if(hex.length===3){ hex=hex.split('').map(c=>c+c).join(''); }
-            if(hex.length!==6){ this.log('Invalid hex'); return; }
-            const r=parseInt(hex.substring(0,2),16);
-            const g=parseInt(hex.substring(2,4),16);
-            const b=parseInt(hex.substring(4,6),16);
-            await this.ledDirect(r,g,b);
+        // Removed runLedSelfTest / sendCommand / direct LED color helpers (unsupported)
+        async disconnectDevice(){
+          if(this.device && this.device.gatt && this.device.gatt.connected){
+            try { this.device.gatt.disconnect(); this.setStatus('Disconnected'); } catch(e){ this.log('Disconnect err: '+e.message); }
+          }
+          this.connected=false;
         },
         async reconnect(){ if(!this.device){ return this.connect(); } if(this.connected||this.connecting) return; try { this.connecting=true; this.setStatus('Reconnecting...'); await this.device.gatt.connect(); this.connecting=false; await this.connect(); } catch(e){ this.connecting=false; this.setStatus('Reconnect failed: '+e.message); } },
         async selectPattern(id){

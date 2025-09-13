@@ -302,11 +302,6 @@ bool motorsEnabled = true;        //used to track if motor drivers are enabled/d
 bool patternSwitched = false;     //used for properly starting patterns from beginning when a new pattern is selected
 int lastPattern = currentPattern; //used with currentPattern to detect pattern switching and set the patternSwitched flag.
 
-// Deferred LEDDIRECT command application (avoid FastLED.show inside BLE callback)
-static volatile bool ledDirectPending = false;
-static uint8_t pendingLedDirectR=0, pendingLedDirectG=0, pendingLedDirectB=0;
-static unsigned long ledDirectTimestamp = 0; // for optional timeout/aging
-
 // Telemetry cache
 struct TelemetryCache {
   int joyA = 0;
@@ -365,30 +360,6 @@ public:
     }
   }
   void onCommandReceived(const String &cmd, const std::string &raw) override {
-    if (cmd == "SELFTEST") {
-      // Start async LED test (non-blocking). Motion pauses until finished.
-      startAsyncLedSelfTest();
-      return; 
-    }
-    if (cmd == "LEDDIRECT") {
-      // Defer heavy LED operations out of BLE callback to avoid stack starvation.
-      // Expected raw format: LEDDIRECT r,g,b  (decimal 0-255)
-      size_t sp = raw.find(' ');
-      if (sp == std::string::npos) { bleConfig.notifyStatus("[LEDDIRECT] ERR syntax use: LEDDIRECT r,g,b"); return; }
-      String args = String(raw.substr(sp+1).c_str()); args.trim();
-      int c1=args.indexOf(','); int c2 = args.indexOf(',', c1+1);
-      if (c1<=0 || c2<=c1) { bleConfig.notifyStatus("[LEDDIRECT] ERR syntax use: LEDDIRECT r,g,b"); return; }
-      int r = constrain(args.substring(0,c1).toInt(),0,255);
-      int g = constrain(args.substring(c1+1,c2).toInt(),0,255);
-      int b = constrain(args.substring(c2+1).toInt(),0,255);
-      pendingLedDirectR = r; pendingLedDirectG = g; pendingLedDirectB = b; ledDirectPending = true; ledDirectTimestamp = millis();
-      bleConfig.notifyStatus(String("[LEDDIRECT] QUEUED ")+r+','+g+','+b);
-      return;
-    }
-    if (cmd == "LEDSCAN") {
-      startLedScan();
-      return;
-    }
     // Unknown command
     bleConfig.notifyStatus(String("[CMD] UNKNOWN ") + cmd);
   }
@@ -703,9 +674,7 @@ void setup() {
   FastLED.show();
   bleConfig.notifyStatus(String("[LEDINIT] pin=") + LED_DATA_PIN + " count=" + NUM_LEDS + " maxBrt=" + MAX_BRIGHTNESS);
 
-  #ifdef SG_ENABLE_LED_DIAG
-    startAsyncLedSelfTest(); // run asynchronously at boot
-  #endif
+  // (Removed startup LED self-test)
 
   homeRadius();               //crash home the radial axis. This is a blocking function.
 
@@ -716,144 +685,7 @@ void setup() {
 #endif
 }
 
-// ------------------------------------------------------------------------------------
-// Runtime-invokable LED hardware self-test. Blocks for ~3 seconds. Safe to call when
-// motors idle. Sends status lines (if BLE already started) via status.
-// ------------------------------------------------------------------------------------
-// ---------------- Asynchronous LED Self-Test -----------------
-// State machine avoids long blocking delays that can starve BLE stack.
-enum LedTestPhase : uint8_t { LT_IDLE, LT_BRIGHT_RAMP, LT_COLOR_FILLS, LT_RAINBOW, LT_DONE };
-static LedTestPhase ledTestPhase = LT_IDLE;
-static elapsedMillis ledTestTimer;
-static uint8_t rampBrightness = 4;
-static uint8_t colorIndex = 0;
-static uint8_t rainbowHue = 0;
-static uint8_t rainbowCycle = 0;
-static bool ledTestWasRunning = false; // remember motion state
-static uint8_t savedUserBrightness = MAX_BRIGHTNESS; // restore after test
-
-static const CRGB kTestColors[] = {CRGB::Red, CRGB::Green, CRGB::Blue, CRGB::Yellow, CRGB::Cyan, CRGB::Magenta, CRGB::Black};
-static const uint8_t kNumTestColors = sizeof(kTestColors)/sizeof(kTestColors[0]);
-
-static void startAsyncLedSelfTest() {
-  if (ledTestPhase != LT_IDLE) return; // already running
-  ledTestWasRunning = runPattern;
-  if (runPattern) setRunLocal(false); // pause motion
-  bleConfig.notifyStatus("[CMD] SELFTEST START");
-#ifdef SG_BLINK_DIAG
-  sgBlink(2);
-#endif
-  savedUserBrightness = FastLED.getBrightness();
-  rampBrightness = 4;
-  FastLED.setBrightness(rampBrightness); // start low
-  FastLED.clear();
-  for (int i=0;i<NUM_LEDS;i++) FastLED.leds()[i] = CRGB::White;
-  FastLED.show();
-  ledTestPhase = LT_BRIGHT_RAMP;
-  ledTestTimer = 0;
-  colorIndex = 0;
-  rainbowHue = 0; rainbowCycle = 0;
-}
-
-static void tickAsyncLedSelfTest() {
-  switch(ledTestPhase) {
-    case LT_IDLE: return; // nothing to do
-    case LT_BRIGHT_RAMP: {
-      if (ledTestTimer >= 18) { // ~18ms per step similar to old delay loop (8+)
-        ledTestTimer = 0;
-        rampBrightness += 4;
-        if (rampBrightness > MAX_BRIGHTNESS) {
-#ifdef SG_BLINK_DIAG
-          sgBlink(3);
-#endif
-          ledTestPhase = LT_COLOR_FILLS;
-          ledTestTimer = 0;
-          // Prime first fill immediately
-          for (int i=0;i<NUM_LEDS;i++) FastLED.leds()[i] = kTestColors[colorIndex];
-          FastLED.setBrightness(MAX_BRIGHTNESS > 120 ? MAX_BRIGHTNESS : 120); // boost for visibility
-          FastLED.show();
-          bleConfig.notifyStatus("[LEDTEST] COLORS");
-        } else {
-          FastLED.setBrightness(rampBrightness);
-          for (int i=0;i<NUM_LEDS;i++) FastLED.leds()[i] = CRGB::White;
-          FastLED.show();
-          if ((rampBrightness % 16)==0) bleConfig.notifyStatus(String("[LEDTEST] RAMP brt=") + rampBrightness);
-        }
-      }
-      break; }
-    case LT_COLOR_FILLS: {
-      if (ledTestTimer >= 200) { // move to next color every 200ms
-        ledTestTimer = 0;
-        colorIndex++;
-        if (colorIndex >= kNumTestColors) {
-#ifdef SG_BLINK_DIAG
-          sgBlink(4);
-#endif
-          ledTestPhase = LT_RAINBOW;
-          rainbowHue = 0; rainbowCycle = 0; ledTestTimer = 0;
-          bleConfig.notifyStatus("[LEDTEST] RAINBOW");
-        } else {
-          for (int i=0;i<NUM_LEDS;i++) FastLED.leds()[i] = kTestColors[colorIndex];
-          FastLED.show();
-          bleConfig.notifyStatus(String("[LEDTEST] COLOR idx=") + colorIndex);
-        }
-      }
-      break; }
-    case LT_RAINBOW: {
-      if (ledTestTimer >= 20) { // ~50 FPS
-        ledTestTimer = 0;
-        for (int i=0;i<NUM_LEDS;i++) FastLED.leds()[i].setHSV(rainbowHue + (i*10), 255, 255);
-        FastLED.show();
-        rainbowHue += 7;
-        if (rainbowHue >= 255) { rainbowHue = 0; rainbowCycle++; }
-        if (rainbowCycle >= 2) {
-          ledTestPhase = LT_DONE;
-          ledTestTimer = 0;
-        }
-      }
-      break; }
-    case LT_DONE: {
-#ifdef SG_BLINK_DIAG
-      if (ledTestTimer < 1) sgBlink(5);
-#endif
-      bleConfig.notifyStatus("[LEDTEST] DONE");
-      if (ledTestWasRunning) setRunLocal(true);
-      FastLED.setBrightness(savedUserBrightness); // restore prior brightness
-      ledTestPhase = LT_IDLE;
-      break; }
-  }
-}
-
-// ---------------- LEDSCAN (single pixel walker) -----------------
-static bool ledScanActive = false;
-static int ledScanIndex = 0;
-static elapsedMillis ledScanTimer;
-static const uint16_t LEDSCAN_INTERVAL_MS = 250;
-static void startLedScan() {
-  if (ledScanActive) return;
-  if (ledTestPhase != LT_IDLE) { bleConfig.notifyStatus("[LEDSCAN] Busy (self-test)"); return; }
-  ledScanActive = true; ledScanIndex = 0; ledScanTimer = 0;
-  bleConfig.notifyStatus("[LEDSCAN] START");
-  FastLED.setBrightness(MAX_BRIGHTNESS > 120 ? MAX_BRIGHTNESS : 120);
-  for(int i=0;i<NUM_LEDS;i++) FastLED.leds()[i]=CRGB::Black;
-  FastLED.show();
-}
-static void tickLedScan(){
-  if(!ledScanActive) return;
-  if (ledScanTimer < LEDSCAN_INTERVAL_MS) return;
-  ledScanTimer = 0;
-  // advance
-  for(int i=0;i<NUM_LEDS;i++) FastLED.leds()[i]=CRGB::Black;
-  if (ledScanIndex < NUM_LEDS) {
-    FastLED.leds()[ledScanIndex] = CRGB::White;
-    FastLED.show();
-    bleConfig.notifyStatus(String("[LEDSCAN] PIX ")+ledScanIndex);
-    ledScanIndex++;
-  } else {
-    ledScanActive = false;
-    bleConfig.notifyStatus("[LEDSCAN] DONE");
-  }
-}
+// (Removed LED self-test and LED scan utilities)
 
 
 
@@ -867,21 +699,7 @@ the gantry from the selected pattern functions or from manual mode.
 
 void loop() {
   bleConfig.loop(); // service BLE events if needed
-  // Apply any deferred LEDDIRECT command before self-test tick so test can overwrite afterwards if running
-  if (ledDirectPending) {
-    // If self-test running, we delay applying until it's idle to avoid conflicting animations
-    if (ledTestPhase == LT_IDLE) {
-      ledDirectPending = false; // claim it
-      for (int i=0;i<NUM_LEDS;i++) FastLED.leds()[i] = CRGB(pendingLedDirectR,pendingLedDirectG,pendingLedDirectB);
-      FastLED.setBrightness(MAX_BRIGHTNESS > 120 ? MAX_BRIGHTNESS : 120);
-      FastLED.show();
-      bleConfig.notifyStatus(String("[LEDDIRECT] APPLIED ") + pendingLedDirectR + ',' + pendingLedDirectG + ',' + pendingLedDirectB);
-    }
-  }
-  // Service asynchronous LED self-test first so timing is consistent
-  tickAsyncLedSelfTest();
-  // Then service LED scan (mutually independent; scan suppressed if self-test active by start guard)
-  tickLedScan();
+  // (Removed LED direct, self-test, and scan debug handling)
 
   //Check to see if the button has been pressed. This has to be called as often as possible to catch button presses.
   button.tick();
@@ -926,10 +744,7 @@ void loop() {
   }
   sendJoystickTelemetry(joystickValues.angular, joystickValues.radial);
 
-  // Suppress motion while LED self-test active (except DONE / IDLE)
-  bool ledTestActive = (ledTestPhase != LT_IDLE);
-  // if test active, we freeze motion subsystem but still allow telemetry & BLE.
-  if (runPattern && !ledTestActive) {
+  if (runPattern) {
     #pragma region Running
     //make sure the motors are enabled, since we want to move them
     if (!motorsEnabled) {
