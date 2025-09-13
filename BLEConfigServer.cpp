@@ -6,8 +6,14 @@ void BLEConfigServer::begin(ISGConfigListener *listener) {
   _listener = listener;
   NimBLEDevice::init(SG_DEVICE_NAME);
   NimBLEDevice::setPower(ESP_PWR_LVL_P9); // Max power (adjust if needed)
+  // (Optional) Connection parameter tuning not applied; NimBLE-Arduino stable API lacks direct setConnectionParams here.
 
   _server = NimBLEDevice::createServer();
+  // Register server callbacks to ensure advertising restarts after disconnects
+  if (!_serverCallbacks) {
+    _serverCallbacks = new ServerCallbacks(this);
+  }
+  _server->setCallbacks(_serverCallbacks);
   _service = _server->createService(SG_SERVICE_UUID);
 
   // Speed characteristic (float). We'll exchange ASCII string representation for simplicity.
@@ -102,7 +108,7 @@ void BLEConfigServer::begin(ISGConfigListener *listener) {
 }
 
 void BLEConfigServer::loop() {
-  // Nothing needed yet. Placeholder for future (e.g., connection watchdog)
+  _watchdog();
 }
 
 void BLEConfigServer::setSpeedMultiplier(float v) {
@@ -163,6 +169,44 @@ void BLEConfigServer::notifyTelemetry(const String &msg) {
   }
 }
 
+void BLEConfigServer::restartAdvertising(const char *reasonTag) {
+  NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
+  if (!adv) return;
+  if (!NimBLEDevice::getServer() || NimBLEDevice::getServer()->getConnectedCount() > 0) return; // still connected
+  // Throttle attempts to at most once every 2 seconds
+  uint32_t now = millis();
+  if (now - _lastAdvAttemptMs < 2000) return;
+  _lastAdvAttemptMs = now;
+  if (reasonTag && _statusChar) {
+    notifyStatus(String("[BLE] ADV_RESTART reason=") + reasonTag);
+  }
+  adv->start();
+}
+
+void BLEConfigServer::disconnectAll(const char *reasonTag) {
+  NimBLEServer *srv = NimBLEDevice::getServer();
+  if (!srv) return;
+  if (reasonTag && _statusChar) notifyStatus(String("[BLE] BLEDROP reason=") + reasonTag);
+  // Copy handles because disconnect alters list
+  auto handles = _connHandles;
+  for (auto h : handles) {
+    srv->disconnect(h);
+  }
+  _connHandles.clear();
+  restartAdvertising("drop");
+}
+
+void BLEConfigServer::_watchdog() {
+  // If no active connections and not advertising, attempt restart.
+  NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
+  NimBLEServer *srv = NimBLEDevice::getServer();
+  if (!adv || !srv) return;
+  bool anyConn = srv->getConnectedCount() > 0;
+  if (!anyConn && !adv->isAdvertising()) {
+    restartAdvertising("wd");
+  }
+}
+
 void BLEConfigServer::_applySpeedWrite(const std::string &valRaw) {
   // Accept either ASCII float or raw 4-byte float
   float newVal = _speedMultiplier;
@@ -218,6 +262,12 @@ void BLEConfigServer::_applyCommandWrite(const std::string &valRaw) {
   }
   if (_listener) {
     _listener->onCommandReceived(String(token.c_str()), valRaw);
+  }
+  // Built-in commands
+  if (token == "BLEADV") {
+    restartAdvertising("cmd");
+  } else if (token == "BLEDROP") {
+    disconnectAll("cmd");
   }
 }
 

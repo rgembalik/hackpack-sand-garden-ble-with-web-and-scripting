@@ -258,9 +258,14 @@
           <div class="mt-4 flex flex-wrap gap-3 text-xs">
             <button @click="regeneratePattern()"
               class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600">Regenerate</button>
-            <button @click="animatePattern()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600"
-              x-text="animating ? 'Pause Animation' : 'Animate'"></button>
+            <button @click="toggleSimulation()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600"
+              x-text="simulationRunning ? 'Pause' : 'Play'"></button>
             <button @click="exportImage()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600">Export</button>
+            <label class="inline-flex items-center gap-1 cursor-pointer select-none ml-auto">
+              <input type="checkbox" x-model="showTrails" @change="onShowTrailsChange()"
+                class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
+              <span>Show Trails</span>
+            </label>
           </div>
         </div>
       </section>
@@ -290,19 +295,32 @@
         // Telemetry state
         joy: { a: 0, r: 0, mag: 0 }, lastState: { pat: null, auto: null, run: null, brt: null }, heartbeatCount: 0,
         patternMeta: [
-          { id: 1, name: 'Simple Spiral', short: 'spiral', description: 'Outward then inward spiral path.' },
-          { id: 2, name: 'Cardioids', short: 'cardioid', description: 'Petaled cardioid style looping figure.' },
-          { id: 3, name: 'Wavy Spiral', short: 'wavy', description: 'Spiral with sinusoidal radial modulation.' },
-          { id: 4, name: 'Rotating Squares', short: 'squares', description: 'Sequence of rotated square outlines progressively scaled.' },
-          { id: 5, name: 'Pentagon Spiral', short: 'penta sp', description: 'Pentagon-based radial stepping spiral.' },
-          { id: 6, name: 'Hexagon Vortex', short: 'hexa', description: 'Hexagon vertices blended into swirling vortex.' },
-          { id: 7, name: 'Pentagon Rainbow', short: 'penta rb', description: 'Mock color-coded pentagon evolution (visual only).' },
-          { id: 8, name: 'Random Walk 1', short: 'rw arc', description: 'Random walk approximated with curved linking arcs.' },
-          { id: 9, name: 'Random Walk 2', short: 'rw line', description: 'Random walk with linear connections.' },
-          { id: 10, name: 'Accidental Butterfly', short: 'butterfly', description: 'Pattern resembling overlapping wings.' }
+          // Added pointsTarget to guide simulation length (approx, can tweak)
+          { id: 1, name: 'Simple Spiral', short: 'spiral', description: 'Outward then inward spiral path (firmware logic).', pointsTarget: 4500 },
+          { id: 2, name: 'Cardioids', short: 'cardioid', description: 'Petaled cardioid style looping figure.', pointsTarget: 1200 },
+          { id: 3, name: 'Wavy Spiral', short: 'wavy', description: 'Spiral with sinusoidal radial modulation.', pointsTarget: 4600 },
+          { id: 4, name: 'Rotating Squares', short: 'squares', description: 'Sequence of rotating square outlines.', pointsTarget: 2300 },
+          { id: 5, name: 'Pentagon Spiral', short: 'penta sp', description: 'Pentagon-based growing & shrinking spiral.', pointsTarget: 3200 },
+          { id: 6, name: 'Hexagon Vortex', short: 'hexa', description: 'Rotating, pulsing hexagon vortex.', pointsTarget: 3000 },
+          { id: 7, name: 'Pentagon Rainbow', short: 'penta rb', description: 'Off-center rotating/translated pentagon.', pointsTarget: 2500 },
+          { id: 8, name: 'Random Walk 1', short: 'rw arc', description: 'Random absolute targets (shortest angular path).', pointsTarget: 1800 },
+          { id: 9, name: 'Random Walk 2', short: 'rw line', description: 'Random straight-line interpolation between points.', pointsTarget: 1800 },
+          { id: 10, name: 'Accidental Butterfly', short: 'butterfly', description: 'Sinusoidally modulated spiral (butterfly).', pointsTarget: 4600 }
         ],
         // Drawing
-        canvas: null, ctx: null, traySize: 0, points: [], animating: false, animationIndex: 0, animationHandle: null,
+  canvas: null, ctx: null, traySize: 0, points: [],
+  // Ball & trench visualization (direct stamping; no offscreen accumulation)
+  ballRadiusPx: 6, trenchDepth: 1.0, trenchSoftness: 8,
+  lastHeadX: null, lastHeadY: null, trenchStampSpacingFactor: 0.55, // spacing = ballRadiusPx * factor
+  trailInitialized: false, ballPrevImage: null, ballPrevBox: null,
+        // simulation timing (distance based)
+        simulationRunning: false, linearSpeed: 300, lastTs: 0,
+        simulationDistance: 0, totalPathLength: 0,
+        segmentLengths: [], segmentEndDistances: [], segmentIndex: 0,
+        segmentPolar: [], // per segment polar interpolation data {r0,r1,dr,theta0,theta1,dθ,length}
+        pointsPolar: [], // derived polar coordinates for each point (r, theta)
+        // path accumulation
+        pathCanvas: null, pathCtx: null, lastDrawnSegmentIndex: 0,
         init() {
           this.canvas = this.$refs.canvas;
           this.ctx = this.canvas.getContext('2d');
@@ -315,7 +333,9 @@
           const rect = this.$refs.tray.getBoundingClientRect();
           const size = Math.min(rect.width, rect.height);
           this.canvas.width = size; this.canvas.height = size; this.traySize = size;
-          this.drawStatic();
+          this.ensurePathBuffer();
+          this.clearPath();
+          this.renderFrame();
         },
         log(msg) {
           const t = new Date().toLocaleTimeString();
@@ -479,201 +499,447 @@
             catch (e) { this.log('Pattern write err: ' + e.message); }
           }
         },
-        regeneratePattern() { this.points = this.generatePatternPoints(this.pattern); this.drawStatic(); },
-        clearPattern() { this.points = []; this.drawStatic(); },
-        centerView() { this.drawStatic(); },
-        animatePattern() {
-          if (this.animating) { cancelAnimationFrame(this.animationHandle); this.animating = false; return; }
-          this.animationIndex = 0; this.animating = true; const step = () => {
-            if (!this.animating) return; this.drawAnimated();
-            if (this.animationIndex < this.points.length) { this.animationHandle = requestAnimationFrame(step); }
-            else { this.animating = false; }
-          }; step();
+        regeneratePattern() {
+          this.points = this.generatePatternPoints(this.pattern);
+          this.computePathMetrics();
+          this.simulationDistance = 0; this.segmentIndex = 0; this.lastDrawnSegmentIndex = 0;
+          this.resetTrail();
+          this.drawBackground();
+          this.renderFrame();
         },
-        drawStatic() {
+        clearPattern() { this.points = []; this.resetTrail(); this.drawBackground(); this.renderFrame(); },
+        resetTrail() { this.lastHeadX = null; this.lastHeadY = null; this.trailInitialized = false; this.ballPrevImage = null; this.ballPrevBox = null; },
+        centerView() { this.renderFrame(); },
+        toggleSimulation() { this.simulationRunning = !this.simulationRunning; if (this.simulationRunning) { this.lastTs = 0; requestAnimationFrame(this.stepSimulation.bind(this)); } },
+        stepSimulation(ts) {
+          if (!this.simulationRunning) return;
+          if (!this.lastTs) this.lastTs = ts; const dt = (ts - this.lastTs) / 1000; this.lastTs = ts;
+          this.simulationDistance += this.linearSpeed * dt;
+          if (this.simulationDistance >= this.totalPathLength) {
+            this.simulationDistance = 0; this.segmentIndex = 0; this.lastDrawnSegmentIndex = 0; this.clearPath();
+            if (this.trenchCtx) this.trenchCtx.clearRect(0,0,this.trenchCanvas.width,this.trenchCanvas.height);
+            this.lastHeadX = null; this.lastHeadY = null;
+          }
+          this.updateSegmentIndex();
+          this.updateTrail();
+          this.renderFrame();
+          requestAnimationFrame(this.stepSimulation.bind(this));
+        },
+        drawBackground() {
           if (!this.ctx) return; const ctx = this.ctx; const w = this.canvas.width; const h = this.canvas.height; ctx.clearRect(0, 0, w, h);
-          // Sand texture base
           const grad = ctx.createRadialGradient(w / 2, h / 2, w * 0.05, w / 2, h / 2, w * 0.5);
           grad.addColorStop(0, '#ffffff'); grad.addColorStop(1, '#cfcfcf');
           ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2); ctx.fill();
-          // Pattern
-          if (this.points.length) { ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2; ctx.beginPath(); this.points.forEach((p, i) => { const { x, y } = p; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); }
         },
-        drawAnimated() {
-          const ctx = this.ctx; const w = this.canvas.width; const h = this.canvas.height; if (this.animationIndex === 0) this.drawStatic();
-          ctx.save(); ctx.strokeStyle = '#222'; ctx.lineWidth = 1.4; ctx.beginPath();
-          const slice = this.points.slice(0, Math.min(this.animationIndex + 2, this.points.length));
-          slice.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
-          ctx.stroke(); ctx.restore(); this.animationIndex += 2;
+        ensurePathBuffer() { /* offscreen path buffer removed */ },
+        clearPath() { if (this.pathCtx) { this.pathCtx.clearRect(0, 0, this.pathCanvas.width, this.pathCanvas.height); this.lastDrawnSegmentIndex = 0; } },
+        computePathMetrics() {
+          this.segmentLengths = []; this.segmentEndDistances = []; this.segmentPolar = []; this.pointsPolar = []; this.totalPathLength = 0;
+          const n = this.points.length; if (n < 2) return;
+          const cx = this.canvas.width / 2; const cy = this.canvas.height / 2;
+          // Build polar points (r in pixels, theta in radians)
+          for (let i = 0; i < n; i++) {
+            const p = this.points[i]; const dx = p.x - cx; const dy = p.y - cy; const r = Math.hypot(dx, dy); let theta = Math.atan2(dy, dx); // [-pi,pi]
+            this.pointsPolar.push({ r, theta });
+          }
+          const tiny = 1e-9;
+          function segmentLengthPolar(r0, r1, dr, dθ) {
+            const absDr = Math.abs(dr); const absDθ = Math.abs(dθ);
+            if (absDr < tiny && absDθ < tiny) return 0;
+            if (absDr < tiny) return r0 * absDθ; // pure arc
+            if (absDθ < tiny) return absDr; // pure radial
+            const k = dr; const B = dθ * dθ; const sqrtB = Math.sqrt(B);
+            function G(u) { return 0.5 * (u * Math.sqrt(k * k + B * u * u) + (k * k / sqrtB) * Math.asinh((sqrtB * u) / Math.abs(k))); }
+            const L = (G(r1) - G(r0)) / k; return Math.abs(L);
+          }
+          for (let i = 0; i < n - 1; i++) {
+            const p0 = this.pointsPolar[i]; const p1 = this.pointsPolar[i + 1];
+            let dθ = p1.theta - p0.theta;
+            // Shortest angular difference wrap to [-pi, pi]
+            while (dθ > Math.PI) dθ -= 2 * Math.PI; while (dθ < -Math.PI) dθ += 2 * Math.PI;
+            const dr = p1.r - p0.r;
+            const len = segmentLengthPolar(p0.r, p1.r, dr, dθ);
+            this.totalPathLength += len;
+            this.segmentLengths.push(len);
+            this.segmentEndDistances.push(this.totalPathLength);
+            this.segmentPolar.push({ r0: p0.r, r1: p1.r, dr, theta0: p0.theta, theta1: p1.theta, dθ, length: len });
+          }
         },
-        exportImage() { const link = document.createElement('a'); link.download = 'sand-pattern-' + this.pattern + '.png'; link.href = this.canvas.toDataURL('image/png'); link.click(); },
-        // Pattern generators (simplified approximations)
+        updateSegmentIndex() {
+          // advance segmentIndex until segmentEndDistances[segmentIndex] >= simulationDistance
+          while (this.segmentIndex < this.segmentEndDistances.length - 1 && this.segmentEndDistances[this.segmentIndex] < this.simulationDistance) {
+            this.segmentIndex++;
+          }
+        },
+        updateTrail() {
+          // Incremental stamping now handled inside renderFrame; keep index advance to prevent backlog if jumping
+          if (!this.showTrails) return;
+          this.lastDrawnSegmentIndex = this.segmentIndex;
+        },
+        onShowTrailsChange() {
+          this.clearPath();
+          if (this.showTrails) {
+            // rebuild up to current segment
+            const prev = this.simulationDistance; this.simulationDistance = 0; this.segmentIndex = 0; this.lastDrawnSegmentIndex = 0;
+            // fast-forward drawing
+            while (this.segmentIndex < this.segmentEndDistances.length && this.segmentEndDistances[this.segmentIndex] < prev) {
+              this.segmentIndex++; this.updateTrail();
+            }
+            this.simulationDistance = prev; this.updateSegmentIndex(); this.updateTrail();
+          }
+          this.renderFrame();
+        },
+        renderFrame() {
+          const ctx = this.ctx;
+          if (!this.trailInitialized) { this.drawBackground(); this.trailInitialized = true; }
+          // Draw head at current simulation index
+          if (this.points.length >= 2 && this.segmentPolar.length) {
+            const seg = this.segmentPolar[this.segmentIndex];
+            if (seg) {
+              const segStartDist = this.segmentIndex === 0 ? 0 : this.segmentEndDistances[this.segmentIndex - 1];
+              const distWithin = this.simulationDistance - segStartDist;
+              // Invert arc-length to get parameter fraction along polar segment
+              let t;
+              const tiny = 1e-9;
+              if (seg.length < tiny) {
+                t = 0;
+              } else if (Math.abs(seg.dr) < tiny && Math.abs(seg.dθ) > tiny) { // pure arc
+                t = distWithin / seg.length;
+              } else if (Math.abs(seg.dθ) < tiny && Math.abs(seg.dr) > tiny) { // pure radial
+                t = distWithin / seg.length;
+              } else {
+                // binary search invert lengthAt(t)
+                function lengthAt(tt) {
+                  // reuse analytic integral via r(t)
+                  const r0 = seg.r0; const dr = seg.dr; const dθ = seg.dθ; const k = dr; const B = dθ * dθ; const sqrtB = Math.sqrt(B);
+                  function G(u) { return 0.5 * (u * Math.sqrt(k * k + B * u * u) + (k * k / sqrtB) * Math.asinh((sqrtB * u) / Math.abs(k))); }
+                  if (Math.abs(dr) < tiny) return r0 * Math.abs(dθ) * tt; // arc
+                  const rT = r0 + dr * tt; const L = (G(rT) - G(r0)) / dr; return Math.abs(L);
+                }
+                let lo = 0, hi = 1; t = 0; const target = distWithin; for (let iter = 0; iter < 18; iter++) { const mid = (lo + hi) / 2; const Lm = lengthAt(mid); if (Lm < target) { lo = mid; } else { hi = mid; } } t = (lo + hi) / 2;
+              }
+              t = Math.min(1, Math.max(0, t));
+              const cx = this.canvas.width / 2; const cy = this.canvas.height / 2;
+              const r = seg.r0 + seg.dr * t; const theta = seg.theta0 + seg.dθ * t;
+              const hx = cx + r * Math.cos(theta); const hy = cy + r * Math.sin(theta);
+              // Incremental stamping directly on main canvas
+              if (this.showTrails) {
+                const spacing = this.ballRadiusPx * this.trenchStampSpacingFactor;
+                const stampSegment = (x0, y0, x1, y1) => {
+                  const dx = x1 - x0, dy = y1 - y0; const dist = Math.hypot(dx, dy);
+                  if (dist === 0) return;
+                  const steps = Math.max(1, Math.floor(dist / spacing));
+                  for (let i = 0; i <= steps; i++) {
+                    const f = i / steps; const sx = x0 + dx * f; const sy = y0 + dy * f;
+                    const trench = ctx;
+                    const innerR = this.ballRadiusPx * 0.2;
+                    const outerR = this.ballRadiusPx + this.trenchSoftness;
+                    const g = trench.createRadialGradient(sx, sy, innerR, sx, sy, outerR);
+                    // Trench impression with reduced per-stamp opacity (so overlap builds depth)
+                    g.addColorStop(0.0, 'rgba(255,255,255,0.55)');          // reduced center
+                    g.addColorStop(0.28, 'rgba(245,245,245,0.38)');
+                    g.addColorStop(0.55, 'rgba(230,230,230,0.22)');
+                    g.addColorStop(0.75, 'rgba(200,200,200,0.15)');         // subtle mid-band
+                    g.addColorStop(0.90, 'rgba(180,180,180,0.10)');         // darker rim hint
+                    g.addColorStop(1.0, 'rgba(150,150,150,0)');                // fade out
+                    trench.globalCompositeOperation = 'source-over';
+                    trench.fillStyle = g;
+                    trench.beginPath(); trench.arc(sx, sy, outerR, 0, Math.PI*2); trench.fill();
+                  }
+                };
+                if (this.lastHeadX != null) {
+                  stampSegment(this.lastHeadX, this.lastHeadY, hx, hy);
+                } else {
+                  stampSegment(hx, hy, hx, hy);
+                }
+                this.lastHeadX = hx; this.lastHeadY = hy;
+              }
+              // Draw head (ball)
+              const ballR = this.ballRadiusPx;
+              if (this.ballPrevImage && this.ballPrevBox) {
+                try { ctx.putImageData(this.ballPrevImage, this.ballPrevBox.x, this.ballPrevBox.y); } catch(_) {}
+              }
+              // Soft glow under ball instead of dark shadow for lighter style
+              const glow = ctx.createRadialGradient(hx, hy, ballR*0.2, hx, hy, ballR*1.3);
+              glow.addColorStop(0, 'rgba(255,255,255,0.55)');
+              glow.addColorStop(1, 'rgba(255,255,255,0)');
+              ctx.save(); ctx.globalCompositeOperation = 'lighter';
+              ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(hx, hy, ballR*1.3, 0, Math.PI*2); ctx.fill(); ctx.restore();
+              // Ball body with highlight
+              const grad = ctx.createRadialGradient(hx - ballR*0.4, hy - ballR*0.4, ballR*0.2, hx, hy, ballR);
+              grad.addColorStop(0, '#eeeeee');
+              grad.addColorStop(0.45, '#d9d9d9');
+              grad.addColorStop(1, '#b5b5b5');
+              ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(hx, hy, ballR, 0, Math.PI * 2); ctx.fill();
+              // Specular highlight
+              ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath(); ctx.arc(hx - ballR*0.35, hy - ballR*0.35, ballR*0.3, 0, Math.PI*2); ctx.fill();
+              // Snapshot area under ball for next frame restore
+              const pad = Math.ceil(ballR * 1.4);
+              const bx = Math.max(0, hx - pad);
+              const by = Math.max(0, hy - pad);
+              const bw = Math.min(this.canvas.width - bx, pad*2);
+              const bh = Math.min(this.canvas.height - by, pad*2);
+              try { this.ballPrevImage = ctx.getImageData(bx, by, bw, bh); this.ballPrevBox = { x: bx, y: by }; } catch(_) {}
+            }
+          } else if (this.points.length === 1) {
+            const p = this.points[0]; ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+          }
+        },
+        exportImage() {
+          // Ensure frame is up to date
+          this.renderFrame();
+          const link = document.createElement('a');
+          link.download = 'sand-pattern-' + this.pattern + '.png';
+          link.href = this.canvas.toDataURL('image/png');
+          link.click();
+        },
+        // Pattern generators – firmware-accurate translation ---------------------------
         generatePatternPoints(id) {
-          // Constants (mirror firmware values)
-          const MAX_R_STEPS = 7000;
-          const STEPS_PER_A_AXIS_REV = 4096; // 2 * 2048
-          const size = this.canvas.width; const cx = size / 2; const cy = size / 2; const trayR = size * 0.48; const pts = [];
+          const size = this.canvas.width; const cx = size / 2; const cy = size / 2; const trayR = size * 0.48;
+          const MAX_R_STEPS = 7000; const STEPS_PER_MOTOR_REV = 2048; const STEPS_PER_A_AXIS_REV = 2 * STEPS_PER_MOTOR_REV;
 
-          // Helpers matching firmware math
-          const degToSteps = d => (STEPS_PER_A_AXIS_REV / 360) * d;
-          const stepsToRad = s => (s / STEPS_PER_A_AXIS_REV) * (Math.PI * 2);
+          // --- Math helpers mirroring firmware ---
+          const fmap = (n, in_min, in_max, out_min, out_max) => (n - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+          const convertDegreesToSteps = deg => Math.round(fmap(deg, 0, 360, 0, 2 * STEPS_PER_MOTOR_REV));
+          const convertStepsToRadians = steps => fmap(steps, 0, 2 * STEPS_PER_MOTOR_REV, 0, 2 * Math.PI);
+          const modulus = (x, y) => x < 0 ? ((x + 1) % y) + y - 1 : x % y;
+
           const polarToXY = (rSteps, aSteps) => {
-            const rNorm = Math.max(0, Math.min(MAX_R_STEPS, rSteps)) / MAX_R_STEPS; // clamp & normalize
-            const rPx = rNorm * trayR;
-            const theta = stepsToRad(aSteps);
+            const clampedR = Math.max(0, Math.min(MAX_R_STEPS, rSteps));
+            const rNorm = clampedR / MAX_R_STEPS; const rPx = rNorm * trayR;
+            const theta = (aSteps / STEPS_PER_A_AXIS_REV) * (Math.PI * 2);
             return { x: cx + rPx * Math.cos(theta), y: cy + rPx * Math.sin(theta) };
           };
 
-          // Utility to interpolate a straight line in polar (cartesian interpolation for fidelity)
-          function linePoints(pA, pB, segments = 40) {
-            const aXY = polarToXY(pA.radial, pA.angular);
-            const bXY = polarToXY(pB.radial, pB.angular);
-            for (let i = 0; i <= segments; i++) {
-              const t = i / segments;
-              pts.push({ x: aXY.x + (bXY.x - aXY.x) * t, y: aXY.y + (bXY.y - aXY.y) * t });
+          // --- drawLine replication (stateful iterator per line) ---
+          function createLineIterator(point0, point1, resolution = 100) {
+            // replicate core algorithm (cartesian interpolation & polar reconversion)
+            const numPoints = Math.max(0, Math.min(100, resolution));
+            let p0 = { ...point0 }; let p1 = { ...point1 };
+            const points = [];
+            // Vertical line detection ±0.5 deg window (convertDegreesToSteps(0.5))
+            const halfDegSteps = convertDegreesToSteps(0.5);
+            const comparisonA = STEPS_PER_A_AXIS_REV - Math.max(p0.angular, p1.angular);
+            const comparisonB = Math.min(p0.angular, p1.angular);
+            let rotated = false;
+            if (comparisonA - comparisonB <= halfDegSteps && comparisonA - comparisonB >= -halfDegSteps) {
+              rotated = true; p0.angular += convertDegreesToSteps(90); p1.angular += convertDegreesToSteps(90);
             }
+            // Cartesian coords
+            const x0 = p0.radial * Math.cos(convertStepsToRadians(p0.angular));
+            const y0 = p0.radial * Math.sin(convertStepsToRadians(p0.angular));
+            const x1 = p1.radial * Math.cos(convertStepsToRadians(p1.angular));
+            const y1 = p1.radial * Math.sin(convertStepsToRadians(p1.angular));
+            const denom = x1 - x0; const m = (y1 - y0) / denom; const b = y0 - m * x0;
+            let useNumPoints = numPoints;
+            if (b < 100 && b > -100) useNumPoints = 100; // origin proximity boost
+            const stepover = (x1 - x0) / useNumPoints;
+            for (let i = 0; i < useNumPoints; i++) {
+              if (i === 0) {
+                points.push({ radial: p0.radial, angular: p0.angular });
+              } else if (i === useNumPoints - 1) {
+                points.push({ radial: p1.radial, angular: p1.angular });
+              } else {
+                const xtemp = x0 + (i) * stepover; // (i) because first already added
+                const ytemp = m * xtemp + b;
+                let theta = Math.atan2(ytemp, xtemp); if (theta < 0) theta = 2 * Math.PI + theta;
+                const radial = Math.sqrt(xtemp * xtemp + ytemp * ytemp);
+                points.push({ radial: Math.round(radial), angular: Math.round(fmap(theta, 0, 2 * Math.PI, 0, 2 * STEPS_PER_MOTOR_REV)) });
+              }
+            }
+            if (rotated) {
+              const shift = convertDegreesToSteps(90);
+              for (const p of points) p.angular -= shift;
+            }
+            let idx = 0;
+            return () => {
+              if (idx >= points.length) return null; return points[idx++];
+            };
           }
 
-          // Pattern implementations translated from firmware logic (iterative simulation)
-          switch (id) {
-            case 1: { // Simple Spiral
-              const angleDiv = 100; const angleStep = degToSteps(360 / angleDiv);
-              const radialDiv = 10 * angleDiv; // 1000
-              let radialStep = MAX_R_STEPS / radialDiv; // 7 steps approx
-              let ang = 0, rad = 0;
-              const iterations = 4500; // enough to show in/out cycles
-              for (let i = 0; i < iterations; i++) {
-                ang += angleStep;
-                rad += radialStep;
+          // Polygon generator + translate (subset of firmware)
+          function nGonGenerator(numPoints, radius, rotationDeg = 0) {
+            const angleStep = STEPS_PER_A_AXIS_REV / numPoints; const rotSteps = convertDegreesToSteps(rotationDeg);
+            const arr = []; for (let i = 0; i < numPoints; i++) arr.push({ radial: radius, angular: i * angleStep + rotSteps }); return arr;
+          }
+          function translatePoints(pointArray, centerPoint) {
+            if (!centerPoint.radial) return pointArray; // origin
+            const cx = centerPoint.radial * Math.cos(convertStepsToRadians(centerPoint.angular));
+            const cy = centerPoint.radial * Math.sin(convertStepsToRadians(centerPoint.angular));
+            return pointArray.map(p => {
+              const x = p.radial * Math.cos(convertStepsToRadians(p.angular)) + cx;
+              const y = p.radial * Math.sin(convertStepsToRadians(p.angular)) + cy;
+              let theta = Math.atan2(y, x); if (theta < 0) theta += 2 * Math.PI;
+              const r = Math.sqrt(x * x + y * y);
+              return { radial: Math.round(r), angular: Math.round(fmap(theta, 0, 2 * Math.PI, 0, 2 * STEPS_PER_MOTOR_REV)) };
+            });
+          }
+
+          // --- Pattern function factories (mirror firmware static vars via closure) ---
+          const patternFactories = {
+            1: () => { // Simple Spiral
+              const angleDivisions = 100; const angleStep = convertDegreesToSteps(360 / angleDivisions);
+              const radialDivisions = 10 * angleDivisions; let radialStep = Math.trunc(MAX_R_STEPS / radialDivisions);
+              return (current, restart) => {
+                if (restart) { radialStep = Math.trunc(MAX_R_STEPS / radialDivisions); }
+                let target = { angular: current.angular + angleStep, radial: current.radial + radialStep };
+                if (target.radial > MAX_R_STEPS || target.radial < 0) { radialStep *= -1; target.radial += 2 * radialStep; }
+                return target;
+              };
+            },
+            2: () => { // Cardioids
+              const radialStep = Math.trunc(MAX_R_STEPS / 8); let direction = 1; let firstRun = true;
+              return (current, restart) => {
+                if (firstRun || restart) { firstRun = false; return { angular: 0, radial: 0 }; }
+                const ang = current.angular + convertDegreesToSteps(43);
+                let nextRad = current.radial + direction * radialStep; if (nextRad > MAX_R_STEPS || nextRad < 0) { direction *= -1; nextRad = current.radial + direction * radialStep; }
+                return { angular: ang, radial: nextRad };
+              };
+            },
+            3: () => { // Wavy Spiral
+              const angleDivisions = 100; const angleStep = convertDegreesToSteps(360 / angleDivisions);
+              const radialDivisions = 10 * angleDivisions; let radialStep = Math.trunc(MAX_R_STEPS / radialDivisions);
+              const amplitude = 200; const period = 8;
+              return (current, restart) => {
+                if (restart) radialStep = Math.trunc(MAX_R_STEPS / radialDivisions);
+                let baseRad = current.radial + radialStep; let ang = current.angular + angleStep;
+                if (baseRad > MAX_R_STEPS || baseRad < 0) { radialStep *= -1; baseRad += 2 * radialStep; }
+                const wave = amplitude * Math.sin(period * convertStepsToRadians(ang));
+                return { angular: ang, radial: Math.round(baseRad + wave) };
+              };
+            },
+            4: () => { // Rotating Squares
+              const segments = 20; const angleShift = convertDegreesToSteps(10);
+              let p1, p2, p3, p4; let step = 0; let firstRun = true; let lineIter = null;
+              const makeLine = (a, b) => (lineIter = createLineIterator(a, b, segments));
+              return (current, restart) => {
+                if (firstRun || restart) {
+                  p1 = { angular: 0, radial: 7000 }; p2 = { angular: convertDegreesToSteps(90), radial: 7000 };
+                  p3 = { angular: convertDegreesToSteps(180), radial: 7000 }; p4 = { angular: convertDegreesToSteps(270), radial: 7000 };
+                  step = 0; firstRun = false; lineIter = createLineIterator(p1, p2, segments);
+                }
+                let point = lineIter && lineIter();
+                if (!point) { // finished edge
+                  step++;
+                  switch (step) {
+                    case 1: makeLine(p2, p3); break;
+                    case 2: makeLine(p3, p4); break;
+                    case 3: makeLine(p4, p1); break;
+                    default:
+                      // rotate and restart
+                      step = 0; p1.angular += angleShift; p2.angular += angleShift; p3.angular += angleShift; p4.angular += angleShift; makeLine(p1, p2); break;
+                  }
+                  point = lineIter();
+                }
+                return point;
+              };
+            },
+            5: () => { // Pentagon Spiral
+              const vertices = 5; let vertexList = []; let start = 0, end = 1; let firstRun = true; let radialStepover = 500; let lineIter = null;
+              const rebuildLine = () => { lineIter = createLineIterator(vertexList[start], vertexList[end], 100); };
+              return (current, restart) => {
+                if (firstRun || restart) { vertexList = nGonGenerator(vertices, 1000, 0); firstRun = false; start = 0; end = 1; radialStepover = 500; rebuildLine(); }
+                let point = lineIter();
+                if (!point) { // edge complete
+                  start = (start + 1) % vertices; end = (end + 1) % vertices;
+                  if (start === 0 && end === 1) { // completed polygon, adjust radii
+                    for (let i = 0; i < vertices; i++) {
+                      let newR = vertexList[i].radial + radialStepover; if (newR > MAX_R_STEPS || newR < 0) { radialStepover *= -1; newR += 2 * radialStepover; }
+                      vertexList[i].radial = newR;
+                    }
+                  }
+                  rebuildLine(); point = lineIter();
+                }
+                return point;
+              };
+            },
+            6: () => { // Hexagon Vortex
+              const vertices = 6; let step = 0; let segments = 100; let firstRun = true; let radialStepover = 350; let radius = 1000; const angleShift = convertDegreesToSteps(5);
+              let points = []; let lineIter = null; let idxEdge = 0;
+              const rebuildHex = () => { points = nGonGenerator(vertices, radius, 0); };
+              const startEdge = () => { const a = points[idxEdge]; const b = points[(idxEdge + 1) % vertices]; lineIter = createLineIterator(a, b, segments); };
+              return (current, restart) => {
+                if (firstRun || restart) { firstRun = false; step = 0; radius = 1000; radialStepover = 350; idxEdge = 0; rebuildHex(); startEdge(); }
+                let pt = lineIter();
+                if (!pt) { // move to next edge or rotate/resize
+                  idxEdge++;
+                  if (idxEdge >= vertices) { // hex complete
+                    idxEdge = 0; // rotate
+                    for (const p of points) p.angular += angleShift;
+                    if ((radius + radialStepover >= MAX_R_STEPS + 2000) || (radius + radialStepover <= 0)) radialStepover *= -1;
+                    radius += radialStepover; for (const p of points) p.radial = radius;
+                  }
+                  startEdge(); pt = lineIter();
+                }
+                return pt;
+              };
+            },
+            7: () => { // Pentagon Rainbow
+              const vertices = 5; const shiftDeg = 2; const baseRadius = 3000; const translateRadius = 4000; let firstRun = true; let shiftCounter = 1; let pointList = []; let start = 0, end = 1; let lineIter = null;
+              const rebuildPent = () => {
+                pointList = nGonGenerator(vertices, baseRadius, shiftCounter * shiftDeg);
+                pointList = translatePoints(pointList, { radial: translateRadius, angular: shiftCounter * convertDegreesToSteps(shiftDeg) });
+                start = 0; end = 1; lineIter = createLineIterator(pointList[start], pointList[end], 100);
+              };
+              return (current, restart) => {
+                if (firstRun || restart) { firstRun = false; shiftCounter = 1; rebuildPent(); }
+                let pt = lineIter();
+                if (!pt) {
+                  start = (start + 1) % vertices; end = (end + 1) % vertices;
+                  if (start === 0 && end === 1) { shiftCounter++; rebuildPent(); pt = lineIter(); } else { lineIter = createLineIterator(pointList[start], pointList[end], 100); pt = lineIter(); }
+                }
+                return pt;
+              };
+            },
+            8: () => { // Random Walk 1 (random absolute targets)
+              return (current, restart) => {
+                if (restart) return { angular: 0, radial: 0 };
+                return { angular: Math.floor(Math.random() * STEPS_PER_A_AXIS_REV), radial: Math.floor(Math.random() * (MAX_R_STEPS + 1)) };
+              };
+            },
+            9: () => { // Random Walk 2 (straight lines between random points)
+              let makeNew = true; let randomPoint = null; let lastPoint = null; let lineIter = null;
+              return (current, restart) => {
+                if (restart) { makeNew = true; lastPoint = current; }
+                if (makeNew) {
+                  randomPoint = { radial: Math.floor(Math.random() * (MAX_R_STEPS + 1)), angular: Math.floor(Math.random() * STEPS_PER_A_AXIS_REV) };
+                  lineIter = createLineIterator(lastPoint || current, randomPoint, 100); makeNew = false;
+                }
+                const pt = lineIter();
+                if (!pt) { makeNew = true; lastPoint = randomPoint; return lastPoint; }
+                return pt;
+              };
+            },
+            10: () => { // Accidental Butterfly
+              const angleDivisions = 100; const angleStep = convertDegreesToSteps(360 / angleDivisions);
+              const radialDivisions = 10 * angleDivisions; let radialStep = Math.trunc(MAX_R_STEPS / radialDivisions);
+              return (current, restart) => {
+                if (restart) radialStep = Math.trunc(MAX_R_STEPS / radialDivisions);
+                let ang = current.angular + angleStep; let rad = current.radial + radialStep;
                 if (rad > MAX_R_STEPS || rad < 0) { radialStep *= -1; rad += 2 * radialStep; }
-                pts.push(polarToXY(rad, ang));
-              }
-              break;
+                const rOffset = 200 * Math.sin(8 * convertStepsToRadians(ang));
+                const aOffset = 40 * Math.cos(3 * convertStepsToRadians(ang));
+                return { radial: Math.round(rad + rOffset), angular: Math.round(ang + convertDegreesToSteps(aOffset)) };
+              };
             }
-            case 2: { // Cardioids style (large radial steps and 43° increments)
-              const radialStep = MAX_R_STEPS / 8; // 875
-              let direction = 1; let ang = 0; let rad = 0;
-              const iterations = 600;
-              for (let i = 0; i < iterations; i++) {
-                if (i > 0) {
-                  ang += degToSteps(43);
-                  let nextRad = rad + direction * radialStep;
-                  if (nextRad <= MAX_R_STEPS && nextRad >= 0) { rad = nextRad; } else { direction *= -1; rad += direction * radialStep; }
-                }
-                pts.push(polarToXY(rad, ang));
-              }
-              break;
-            }
-            case 3: { // Wavy Spiral
-              const angleDiv = 100; const angleStep = degToSteps(360 / angleDiv); const radialDiv = 10 * angleDiv;
-              let radialStep = MAX_R_STEPS / radialDiv; let ang = 0, rad = 0;
-              const amplitude = 200; const period = 8; const iterations = 4600;
-              for (let i = 0; i < iterations; i++) {
-                ang += angleStep; rad += radialStep;
-                if (rad > MAX_R_STEPS || rad < 0) { radialStep *= -1; rad += 2 * radialStep; }
-                const wave = amplitude * Math.sin(period * stepsToRad(ang));
-                pts.push(polarToXY(rad + wave, ang));
-              }
-              break;
-            }
-            case 4: { // Rotating Squares (edges traced sequentially then rotate 10°)
-              const angleShift = degToSteps(10);
-              let p1 = { angular: 0, radial: 7000 }, p2 = { angular: degToSteps(90), radial: 7000 }, p3 = { angular: degToSteps(180), radial: 7000 }, p4 = { angular: degToSteps(270), radial: 7000 };
-              const squares = 28; const segmentsPerEdge = 20;
-              for (let s = 0; s < squares; s++) {
-                linePoints(p1, p2, segmentsPerEdge);
-                linePoints(p2, p3, segmentsPerEdge);
-                linePoints(p3, p4, segmentsPerEdge);
-                linePoints(p4, p1, segmentsPerEdge);
-                // rotate
-                p1.angular += angleShift; p2.angular += angleShift; p3.angular += angleShift; p4.angular += angleShift;
-              }
-              break;
-            }
-            case 5: { // Pentagon Spiral (grow/shrink)
-              const vertices = 5; const radialStepoverInit = 500; let radialStepover = radialStepoverInit; let radius = 1000; // start radius from firmware nGon call (approx)
-              const makePent = (r) => { const arr = []; for (let i = 0; i < vertices; i++) { const ang = degToSteps((360 / vertices) * i); arr.push({ radial: r, angular: ang }); } return arr; };
-              let start = 0, end = 1; let poly = makePent(radius);
-              const cycles = 160; // number of pentagons iterations
-              for (let c = 0; c < cycles; c++) {
-                // traverse one edge at a time using linePoints
-                for (let edge = 0; edge < vertices; edge++) {
-                  start = edge; end = (edge + 1) % vertices; linePoints(poly[start], poly[end], 40);
-                }
-                // adjust radius for each vertex
-                radius += radialStepover;
-                if (radius > MAX_R_STEPS || radius < 0) { radialStepover *= -1; radius += 2 * radialStepover; }
-                poly = makePent(radius);
-              }
-              break;
-            }
-            case 6: { // Hexagon Vortex
-              const vertices = 6; const angleShift = degToSteps(5); let radialStepover = 350; let radius = 1000;
-              const makeHex = (r, rot) => { const arr = []; for (let i = 0; i < vertices; i++) { const ang = degToSteps((360 / vertices) * i) + rot; arr.push({ radial: r, angular: ang }); } return arr; };
-              let rot = 0; const cycles = 140; for (let c = 0; c < cycles; c++) {
-                const hex = makeHex(radius, rot);
-                for (let i = 0; i < vertices; i++) { linePoints(hex[i], hex[(i + 1) % vertices], 30); }
-                rot += angleShift;
-                if ((radius + radialStepover >= MAX_R_STEPS + 2000) || (radius + radialStepover <= 0)) radialStepover *= -1;
-                radius += radialStepover;
-              }
-              break;
-            }
-            case 7: { // Pentagon Rainbow (rotating, center translated to radius=4000, angle shifts 2° each iteration)
-              const vertices = 5; const shiftDeg = 2; const angleShift = degToSteps(shiftDeg); let shiftCounter = 1;
-              const baseRadius = 3000; const centerRadius = 4000; const iterations = 140;
-              for (let it = 0; it < iterations; it++) {
-                const rotation = degToSteps(shiftCounter * shiftDeg);
-                const centerAng = shiftCounter * angleShift; // translation angular component
-                for (let v = 0; v < vertices; v++) {
-                  const a1 = degToSteps((360 / vertices) * v) + rotation;
-                  const a2 = degToSteps((360 / vertices) * ((v + 1) % vertices)) + rotation;
-                  const pA = { radial: baseRadius + centerRadius, angular: a1 + centerAng };
-                  const pB = { radial: baseRadius + centerRadius, angular: a2 + centerAng };
-                  linePoints(pA, pB, 25);
-                }
-                shiftCounter++;
-              }
-              break;
-            }
-            case 8: { // Random Walk 1 (arcs)
-              let ang = 0, rad = MAX_R_STEPS * 0.3; const steps = 220;
-              for (let i = 0; i < steps; i++) {
-                // pick new target
-                const targetAng = Math.random() * STEPS_PER_A_AXIS_REV;
-                const targetRad = Math.random() * MAX_R_STEPS;
-                // approximate arc: interpolate angle minimal distance
-                let diff = targetAng - ang; // wrap shortest
-                diff = ((diff + STEPS_PER_A_AXIS_REV / 2) % STEPS_PER_A_AXIS_REV) - STEPS_PER_A_AXIS_REV / 2;
-                const arcSegments = 30; for (let s = 1; s <= arcSegments; s++) {
-                  const t = s / arcSegments; const a = ang + diff * t; const r = rad + (targetRad - rad) * t; pts.push(polarToXY(r, a));
-                }
-                ang = (ang + diff) % STEPS_PER_A_AXIS_REV; if (ang < 0) ang += STEPS_PER_A_AXIS_REV; rad = targetRad;
-              }
-              break;
-            }
-            case 9: { // Random Walk 2 (straight lines)
-              let ang = 0, rad = MAX_R_STEPS * 0.5; const steps = 120;
-              for (let i = 0; i < steps; i++) {
-                const target = { radial: Math.random() * MAX_R_STEPS, angular: Math.random() * STEPS_PER_A_AXIS_REV };
-                linePoints({ radial: rad, angular: ang }, target, 40);
-                ang = target.angular; rad = target.radial;
-              }
-              break;
-            }
-            case 10: { // Accidental Butterfly
-              const angleDiv = 100; const angleStep = degToSteps(360 / angleDiv); const radialDiv = 10 * angleDiv;
-              let radialStep = MAX_R_STEPS / radialDiv; let ang = 0, rad = 0; const iterations = 4600;
-              for (let i = 0; i < iterations; i++) {
-                ang += angleStep; rad += radialStep; if (rad > MAX_R_STEPS || rad < 0) { radialStep *= -1; rad += 2 * radialStep; }
-                const rOffset = 200 * Math.sin(8 * stepsToRad(ang));
-                const aOffset = degToSteps((40 / (360 / (STEPS_PER_A_AXIS_REV))) * Math.cos(3 * stepsToRad(ang))); // convert 40 deg amplitude to steps incorrectly? We'll approximate below
-                // Simpler: aOffset in steps:
-                const aOffsetSteps = degToSteps(40 * Math.cos(3 * stepsToRad(ang)) / 40); // scale down for subtlety
-                pts.push(polarToXY(rad + rOffset, ang + aOffsetSteps));
-              }
-              break;
-            }
+          };
+
+          // --- Simulation driver ---
+          const factory = patternFactories[id]; if (!factory) return [];
+          const stepFn = factory();
+          const targetPoints = this.patternMeta[id - 1]?.pointsTarget || 2000;
+          let current = { radial: 0, angular: 0 }; let restart = true; const pts = [];
+          let safety = targetPoints * 4; // guardrail halt
+          while (pts.length < targetPoints && safety-- > 0) {
+            const target = stepFn(current, restart);
+            restart = false;
+            // orchestrateMotion simplified effect: final position equals target (angle wrapped)
+            current = {
+              radial: Math.max(0, Math.min(MAX_R_STEPS, target.radial)),
+              angular: modulus(target.angular, STEPS_PER_A_AXIS_REV)
+            };
+            const xy = polarToXY(current.radial, current.angular);
+            pts.push(xy);
           }
           return pts;
         }

@@ -5,6 +5,8 @@
 #pragma once
 #include <Arduino.h>
 #include <NimBLEDevice.h>
+#include <vector>
+#include <algorithm>
 
 // BLE Service & Characteristic UUIDs (randomly generated v4 UUIDs)
 // Single service exposes configuration for Sand Garden
@@ -50,6 +52,9 @@ public:
   void setRunState(bool r);
   void notifyStatus(const String &msg);
   void notifyTelemetry(const String &msg);
+  // Manual controls (invoked via command characteristic tokens or future API)
+  void restartAdvertising(const char *reasonTag = nullptr);
+  void disconnectAll(const char *reasonTag = nullptr);
 
 private:
   class SpeedCallbacks : public NimBLECharacteristicCallbacks {
@@ -110,4 +115,51 @@ private:
   int _currentPattern = 1;       // maps to sketch patterns (1-indexed like existing code)
   bool _autoMode = true;
   bool _runState = false;
+
+  // Server connection lifecycle callbacks (restart advertising after disconnect)
+  class ServerCallbacks : public NimBLEServerCallbacks {
+  public:
+    ServerCallbacks(BLEConfigServer *parent) : _parent(parent) {}
+    void onConnect(NimBLEServer *server, NimBLEConnInfo &connInfo) override {
+      (void)server; (void)connInfo;
+      // Optional: could lower TX power or adjust parameters here.
+      if (_parent && _parent->_statusChar) {
+        _parent->notifyStatus(String("[BLE] CONNECT conn=") + String(connInfo.getConnHandle()));
+      }
+      if (_parent) {
+        uint16_t h = connInfo.getConnHandle();
+        bool found=false; for(auto v : _parent->_connHandles){ if(v==h){found=true;break;} }
+        if(!found) _parent->_connHandles.push_back(h);
+      }
+    }
+    void onDisconnect(NimBLEServer *server, NimBLEConnInfo &connInfo, int reason) override {
+      (void)server;
+      if (_parent && _parent->_statusChar) {
+        _parent->notifyStatus(String("[BLE] DISCONNECT reason=") + String(reason));
+      }
+      if (_parent) {
+        // Remove handle from list
+        uint16_t h = connInfo.getConnHandle();
+        auto &vec = _parent->_connHandles;
+        vec.erase(std::remove(vec.begin(), vec.end(), h), vec.end());
+        _parent->restartAdvertising("disc");
+      }
+    }
+    void onMTUChange(uint16_t MTU, NimBLEConnInfo &connInfo) override {
+      (void)connInfo;
+      if (_parent && _parent->_statusChar) {
+        _parent->notifyStatus(String("[BLE] MTU=") + String(MTU));
+      }
+    }
+  private:
+    BLEConfigServer *_parent;
+  };
+  ServerCallbacks *_serverCallbacks = nullptr; // keep pointer to manage lifetime
+
+  // Internal helpers
+  // (moved) _applyCommandWrite declared only once here (removed earlier duplicate)
+  void _watchdog();
+
+  std::vector<uint16_t> _connHandles; // active connections
+  uint32_t _lastAdvAttemptMs = 0;     // throttle advertising restart attempts
 };
