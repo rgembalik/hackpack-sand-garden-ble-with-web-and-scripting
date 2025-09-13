@@ -918,8 +918,9 @@
                 let ang = current.angular + angleStep; let rad = current.radial + radialStep;
                 if (rad > MAX_R_STEPS || rad < 0) { radialStep *= -1; rad += 2 * radialStep; }
                 const rOffset = 200 * Math.sin(8 * convertStepsToRadians(ang));
-                const aOffset = 40 * Math.cos(3 * convertStepsToRadians(ang));
-                return { radial: Math.round(rad + rOffset), angular: Math.round(ang + convertDegreesToSteps(aOffset)) };
+                const aOffset = 40 * Math.cos(3 * convertStepsToRadians(ang)); // NOTE: firmware adds this directly in steps (not degrees)
+                // Firmware logic: target.radial += rOffset; target.angular += aOffset; where aOffset amplitude is 40 steps.
+                return { radial: Math.round(rad + rOffset), angular: Math.round(ang + aOffset) };
               };
             }
           };
