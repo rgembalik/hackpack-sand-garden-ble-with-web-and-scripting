@@ -143,9 +143,6 @@ static const unsigned long JOYSTICK_TRIM_INTERVAL_MS = 4000; // how often we may
 static int trimAccumulatorA = 0;
 static int trimAccumulatorR = 0;
 static elapsedMillis sinceLastTrim;
-// Raw joystick last-read values (0-4095) captured for debug/telemetry
-static volatile int lastJoystickRawA = -1;
-static volatile int lastJoystickRawR = -1;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /*
@@ -354,8 +351,7 @@ static void sendJoystickTelemetry(int a, int r)
   telemetry.lastSentJoyR = r;
   int mag = max(abs(a), abs(r));
   // Include raw analog values so we can inspect non-linearity and offsets
-  String line = "JOY a=" + String(a) + " r=" + String(r) + " mag=" + String(mag) +
-                " rawA=" + String(lastJoystickRawA) + " rawR=" + String(lastJoystickRawR);
+  String line = "JOY a=" + String(a) + " r=" + String(r) + " mag=" + String(mag);
   bleConfig.notifyTelemetry(line);
   bleConfig.notifyStatus("[JOY] " + line); // mirrored in status with tag for visibility
 }
@@ -626,7 +622,6 @@ void setup()
   // Generate a random seed. If you want to use pseudorandom numbers in a pattern, this makes them more random.
   // Make sure that RANDOM_SEED_PIN is an analog pin that's not connected to anything.
   randomSeed(analogRead(RANDOM_SEED_PIN));
-
   // configure the joystick and button pins
   pinMode(JOYSTICK_A_PIN, INPUT);
   pinMode(JOYSTICK_R_PIN, INPUT);
@@ -879,8 +874,8 @@ const int R_CENTER = 3154; // neutral radial
 const int R_HIGH = 4095;   // full scale (DOWN)
 
 // Deadzone half-width around center (tunable)
-const int DEADZONE_A = 5; // raw counts around center for angular
-const int DEADZONE_R = 5; // raw counts around center for radial
+const int DEADZONE_A = 50; // raw counts around center for angular
+const int DEADZONE_R = 40; // raw counts around center for radial
 Positions readJoystick(void) {
   Positions values;
   values.angular = map(analogRead(JOYSTICK_A_PIN), A_LOW, A_HIGH, -100, 100);

@@ -1,3 +1,12 @@
+
+## Changes since original
+
+- 
+- Output pin number for A0 is not correct for some reason on ESP32. I had to specify `GPIO_NUM_1` manually for that pin.
+- Joystick analog reads did not work as expected on ESP32 — the resting state was around 75% of the max value. The original Arduino Nano is 5V, but the ESP32 uses 3.3V logic. Since the joystick gets its VCC from USB-C (typically 5V), this can **overdrive the ESP32 analog pins**. Technically, you should use a voltage divider to safely drop the joystick output to 3.3V for the ESP32. For quick testing, I applied a naive offset in code, but **for long-term reliability, add a voltage divider on each analog line**.
+
+## Working
+
 ### Compilation
 ```bash
 arduino-cli compile --fqbn arduino:esp32:nano_nora --warnings default --build-property "compiler.cpp.extra_flags=-fpermissive" --export-binaries .

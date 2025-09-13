@@ -60,32 +60,42 @@ void BLEConfigServer::begin(ISGConfigListener *listener) {
   _service->start();
   NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
   // --- Advertising configuration ---
-  // Some central devices (certain Android builds, generic BLE scanners) may show
-  // "Unsupported device" when the Complete Local Name is only present in the
-  // scan response and not the first advertising packet. We force the name into
-  // the primary ADV payload (may reduce remaining bytes for other data but our
-  // payload is small).
+  // ISSUE (Windows not showing name until connect):
+  // The original code tried to place Flags + 128-bit Service UUID + Complete Local Name
+  // all in the primary advertising packet. Size math (BLE legacy ADV max = 31 bytes):
+  //   Flags AD structure:            3 bytes (len=2,type=0x01,data=1)
+  //   128-bit Service UUID structure: 18 bytes (len=17,type=0x07,data=16)
+  //   Complete Local Name ("Sand Garden") structure: 13 bytes (len=12,type=0x09,data=11)
+  //   TOTAL = 34 bytes > 31 -> stack silently drops/moves one field (usually the name
+  //   goes to the scan response). Windows' default UI often does NOT perform a scan
+  //   response request before showing devices, so the name appeared only after connect.
+  // FIX: Put only Flags + Complete Local Name in the primary ADV, move the 128-bit
+  // Service UUID to the scan response. This guarantees name visibility on Windows.
+  // If you later need service UUID in the primary packet, shorten the name or use a
+  // 16-bit SIG-adopted UUID (not possible for custom service) or switch to extended
+  // advertising (not broadly supported in all stacks yet).
 
-  NimBLEAdvertisementData advData;      // primary advertising payload
-  NimBLEAdvertisementData scanData;     // (kept empty for now)
+  NimBLEAdvertisementData advData;  // primary advertising payload (keep minimal for name)
+  NimBLEAdvertisementData scanData; // secondary scan response (roomy for UUIDs, etc.)
 
-  // Flags (LE General Discoverable, BR/EDR not supported) - NimBLE sets this automatically
-  // but we add explicitly for clarity.
+  // Flags (LE General Discoverable, BR/EDR not supported)
   advData.setFlags(BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP);
 
-  // Include the service UUID (16/32/128-bit supported). This uses Complete List type.
-  advData.addServiceUUID(_service->getUUID());
-
-  // Add the complete local name in the main advertising packet (NOT only scan response).
+  // Put the COMPLETE LOCAL NAME in the primary packet so Windows shows it immediately.
   advData.setName(SG_DEVICE_NAME);
 
-  // Optional: appearance set to generic (0). If you define a custom appearance, set here.
+  // Move the (large) 128-bit custom service UUID to the scan response to stay under 31 bytes.
+  scanData.addServiceUUID(_service->getUUID());
+
+  // Optional: appearance (generic = 0)
   adv->setAppearance(0x0000);
 
-  // Apply the assembled data. Leaving scan response empty ensures centrals
-  // can show name immediately from first packet.
+  // Apply assembled payloads.
   adv->setAdvertisementData(advData);
   adv->setScanResponseData(scanData);
+
+  // (Optional future enhancement) You can add manufacturer data or additional
+  // characteristics counts to scanData later, but keep primary adv lean.
 
   // Start advertising (auto-restart on disconnect is enabled by default in NimBLE-Arduino)
   adv->start();
