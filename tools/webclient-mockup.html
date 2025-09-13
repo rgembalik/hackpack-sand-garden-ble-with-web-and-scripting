@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -33,41 +34,99 @@
   <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <style>
     /* Scrollbar theming */
-    ::-webkit-scrollbar { width: 10px; }
-    ::-webkit-scrollbar-track { background:#111; }
-    ::-webkit-scrollbar-thumb { background:#333; border-radius:6px; }
-    ::-webkit-scrollbar-thumb:hover { background:#444; }
+    ::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #111;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #333;
+      border-radius: 6px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #444;
+    }
 
     /* Screw indicators */
-    .sg-screw { width:18px; height:18px; border:2px solid #ff7a00; border-radius:50%; position:absolute; box-shadow:0 0 6px 2px rgba(255,122,0,0.35), inset 0 0 4px rgba(255,122,0,0.4); }
-    .sg-screw::after { content:''; position:absolute; top:50%; left:50%; width:12px; height:2px; background:#ff7a00; transform:translate(-50%,-50%); }
+    .sg-screw {
+      width: 18px;
+      height: 18px;
+      border: 2px solid #ff7a00;
+      border-radius: 50%;
+      position: absolute;
+      box-shadow: 0 0 6px 2px rgba(255, 122, 0, 0.35), inset 0 0 4px rgba(255, 122, 0, 0.4);
+    }
+
+    .sg-screw::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 12px;
+      height: 2px;
+      background: #ff7a00;
+      transform: translate(-50%, -50%);
+    }
 
     /* Circle (sand tray) */
-    .sand-tray { aspect-ratio:1/1; border:4px solid #fff; border-radius:50%; background:radial-gradient(circle at 50% 50%, #ffffff 0%, #d9d9d9 55%, #cfcfcf 70%, #bfbfbf 90%); position:relative; }
-    .tray-overlay { position:absolute; inset:0; mix-blend-mode:multiply; pointer-events:none; }
-    .pattern-canvas { width:100%; height:100%; border-radius:50%; }
+    .sand-tray {
+      aspect-ratio: 1/1;
+      border: 4px solid #fff;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 50%, #ffffff 0%, #d9d9d9 55%, #cfcfcf 70%, #bfbfbf 90%);
+      position: relative;
+    }
+
+    .tray-overlay {
+      position: absolute;
+      inset: 0;
+      mix-blend-mode: multiply;
+      pointer-events: none;
+    }
+
+    .pattern-canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+    }
   </style>
 </head>
+
 <body class="h-full bg-sg-bg text-gray-100 font-sans antialiased">
   <div class="min-h-full flex flex-col" x-data="sandGardenApp()" x-init="init()">
     <!-- Header -->
     <header class="px-6 py-4 border-b border-gray-700/40 flex items-center gap-6 bg-sg-panel/70 backdrop-blur-md">
       <div class="flex items-center gap-3">
         <div class="relative w-10 h-10">
-          <div class="absolute inset-0 rounded-full bg-gradient-to-br from-sg-accent to-sg-accentAlt blur-sm opacity-70"></div>
-          <div class="relative inset-0 w-full h-full rounded-full flex items-center justify-center bg-sg-panel text-sg-accent font-bold tracking-wider">SG</div>
+          <div
+            class="absolute inset-0 rounded-full bg-gradient-to-br from-sg-accent to-sg-accentAlt blur-sm opacity-70">
+          </div>
+          <div
+            class="relative inset-0 w-full h-full rounded-full flex items-center justify-center bg-sg-panel text-sg-accent font-bold tracking-wider">
+            SG</div>
         </div>
-        <h1 class="text-xl font-semibold tracking-wide">Sand Garden Controller <span class="text-sg-accent text-base font-medium">Mockup</span></h1>
+        <h1 class="text-xl font-semibold tracking-wide">Sand Garden Controller <span
+            class="text-sg-accent text-base font-medium">Mockup</span></h1>
       </div>
       <div class="flex-1"></div>
       <div class="flex items-center gap-4">
-        <button @click="toggleRun()" :class="running ? 'bg-red-600 hover:bg-red-500' : 'bg-sg-accent hover:bg-sg-accent/80'" class="px-4 py-2 rounded-md font-medium transition shadow-inner-glow focus:outline-none focus:ring-2 focus:ring-sg-accent/60"> <span x-text="running ? 'Stop' : 'Run'"></span> </button>
-        <button @click="connect()" class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 transition font-medium focus:outline-none focus:ring-2 focus:ring-sg-accent/60" :disabled="connecting || connected" :class="(connecting||connected) ? 'opacity-60 cursor-not-allowed' : ''">
+        <button @click="toggleRun()"
+          :class="running ? 'bg-red-600 hover:bg-red-500' : 'bg-sg-accent hover:bg-sg-accent/80'"
+          class="px-4 py-2 rounded-md font-medium transition shadow-inner-glow focus:outline-none focus:ring-2 focus:ring-sg-accent/60">
+          <span x-text="running ? 'Stop' : 'Run'"></span> </button>
+        <button @click="connect()"
+          class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 transition font-medium focus:outline-none focus:ring-2 focus:ring-sg-accent/60"
+          :disabled="connecting || connected" :class="(connecting||connected) ? 'opacity-60 cursor-not-allowed' : ''">
           <span x-show="!connected && !connecting">Connect</span>
           <span x-show="connecting">Connecting...</span>
           <span x-show="connected">Connected</span>
         </button>
-        <button x-show="!connected && device && !connecting" @click="reconnect()" class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 transition font-medium focus:outline-none focus:ring-2 focus:ring-sg-accent/60">Reconnect</button>
+        <button x-show="!connected && device && !connecting" @click="reconnect()"
+          class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 transition font-medium focus:outline-none focus:ring-2 focus:ring-sg-accent/60">Reconnect</button>
       </div>
     </header>
 
@@ -79,7 +138,8 @@
         <div class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow relative">
           <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">Device Status
             <span class="inline-flex items-center" :class="connected ? 'text-green-400' : 'text-gray-400'">
-              <span class="w-2.5 h-2.5 rounded-full mr-1" :class="connected ? 'bg-green-400 animate-pulse' : 'bg-gray-500' "></span>
+              <span class="w-2.5 h-2.5 rounded-full mr-1"
+                :class="connected ? 'bg-green-400 animate-pulse' : 'bg-gray-500' "></span>
               <span x-text="connected ? 'Online' : 'Offline'"></span>
             </span>
           </h2>
@@ -105,42 +165,51 @@
         </div>
 
         <!-- Configuration -->
-        <form @submit.prevent class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow space-y-5">
+        <form @submit.prevent
+          class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow space-y-5">
           <h2 class="text-lg font-semibold mb-1">Configuration</h2>
           <div>
-            <label for="speedMultiplier" class="block text-sm font-medium mb-1">Speed Multiplier <span class="text-gray-500">(0.1 - 3.0)</span></label>
+            <label for="speedMultiplier" class="block text-sm font-medium mb-1">Speed Multiplier <span
+                class="text-gray-500">(0.1 - 3.0)</span></label>
             <div class="flex items-center gap-3">
-              <input id="speedMultiplier" type="range" min="0.1" max="3" step="0.1" x-model.number="speedMultiplier" @input="debouncedSendSpeed()" class="w-full accent-sg-accent" />
-              <input type="number" step="0.1" min="0.1" max="3" x-model.number="speedMultiplier" @change="sendSpeed()" class="w-20 bg-gray-800 border border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-sg-accent/50" />
+              <input id="speedMultiplier" type="range" min="0.1" max="3" step="0.1" x-model.number="speedMultiplier"
+                @input="debouncedSendSpeed()" class="w-full accent-sg-accent" />
+              <input type="number" step="0.1" min="0.1" max="3" x-model.number="speedMultiplier" @change="sendSpeed()"
+                class="w-20 bg-gray-800 border border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-sg-accent/50" />
             </div>
           </div>
           <div class="flex items-center gap-4">
             <label class="inline-flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" x-model="autoMode" @change="sendMode()" class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
+              <input type="checkbox" x-model="autoMode" @change="sendMode()"
+                class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
               <span class="text-sm">Automatic Mode</span>
             </label>
             <label class="inline-flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" x-model="showTrails" class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
+              <input type="checkbox" x-model="showTrails"
+                class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
               <span class="text-sm">Show Trails</span>
             </label>
           </div>
           <div class="flex gap-3">
-            <button type="button" @click="centerView()" class="px-3 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-sm font-medium">Center View</button>
-            <button type="button" @click="clearPattern()" class="px-3 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-sm font-medium">Clear Pattern</button>
+            <button type="button" @click="centerView()"
+              class="px-3 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-sm font-medium">Center View</button>
+            <button type="button" @click="clearPattern()"
+              class="px-3 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-sm font-medium">Clear Pattern</button>
           </div>
         </form>
 
         <!-- Logs -->
-        <div class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow flex flex-col h-64">
-            <h2 class="text-lg font-semibold mb-2">Event Log</h2>
-            <div class="flex-1 overflow-auto text-xs space-y-1 leading-relaxed font-mono" x-ref="log">
-              <template x-for="(line, idx) in logs" :key="idx">
-                <div class="text-gray-400" x-text="line"></div>
-              </template>
-            </div>
-            <div class="pt-2 flex justify-end">
-              <button @click="logs=[]" class="text-xs text-sg-accent hover:underline">Clear</button>
-            </div>
+        <div
+          class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow flex flex-col h-64">
+          <h2 class="text-lg font-semibold mb-2">Event Log</h2>
+          <div class="flex-1 overflow-auto text-xs space-y-1 leading-relaxed font-mono" x-ref="log">
+            <template x-for="(line, idx) in logs" :key="idx">
+              <div class="text-gray-400" x-text="line"></div>
+            </template>
+          </div>
+          <div class="pt-2 flex justify-end">
+            <button @click="logs=[]" class="text-xs text-sg-accent hover:underline">Clear</button>
+          </div>
         </div>
       </section>
 
@@ -151,7 +220,9 @@
           <ul class="grid sm:grid-cols-2 gap-3">
             <template x-for="p in patternMeta" :key="p.id">
               <li>
-                <button @click="selectPattern(p.id)" :class="pattern === p.id ? 'ring-2 ring-sg-accent/70 bg-sg-accent/10' : 'hover:bg-gray-700/50'" class="w-full text-left px-3 py-2 rounded-lg bg-gray-800/40 border border-gray-700/60 transition duration-150 focus:outline-none focus:ring-2 focus:ring-sg-accent/50">
+                <button @click="selectPattern(p.id)"
+                  :class="pattern === p.id ? 'ring-2 ring-sg-accent/70 bg-sg-accent/10' : 'hover:bg-gray-700/50'"
+                  class="w-full text-left px-3 py-2 rounded-lg bg-gray-800/40 border border-gray-700/60 transition duration-150 focus:outline-none focus:ring-2 focus:ring-sg-accent/50">
                   <div class="flex justify-between items-center">
                     <span class="font-medium" x-text="p.id + '. ' + p.name"></span>
                     <span class="text-xs text-gray-400" x-text="p.short"></span>
@@ -185,8 +256,10 @@
             </div>
           </div>
           <div class="mt-4 flex flex-wrap gap-3 text-xs">
-            <button @click="regeneratePattern()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600">Regenerate</button>
-            <button @click="animatePattern()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600" x-text="animating ? 'Pause Animation' : 'Animate'" ></button>
+            <button @click="regeneratePattern()"
+              class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600">Regenerate</button>
+            <button @click="animatePattern()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600"
+              x-text="animating ? 'Pause Animation' : 'Animate'"></button>
             <button @click="exportImage()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600">Export</button>
           </div>
         </div>
@@ -200,396 +273,407 @@
   </div>
 
   <script>
-    function sandGardenApp(){
+    function sandGardenApp() {
       return {
         // State
-        connected:false,
-        connecting:false,
-        running:false,
-        autoMode:true,
-        speedMultiplier:1.0,
-        pattern:1,
-        showTrails:true,
-        statusMessage:'Idle',
-        logs:[],
-        device:null, server:null,
-  chars:{ speed:null, pattern:null, status:null, mode:null, run:null, telemetry:null },
+        connected: false,
+        connecting: false,
+        running: false,
+        autoMode: true,
+        speedMultiplier: 1.0,
+        pattern: 1,
+        showTrails: true,
+        statusMessage: 'Idle',
+        logs: [],
+        device: null, server: null,
+        chars: { speed: null, pattern: null, status: null, mode: null, run: null, telemetry: null },
         // Telemetry state
-        joy:{a:0,r:0,mag:0}, lastState:{pat:null,auto:null,run:null,brt:null}, heartbeatCount:0,
-        patternMeta:[
-          {id:1,name:'Simple Spiral',short:'spiral',description:'Outward then inward spiral path.'},
-          {id:2,name:'Cardioids',short:'cardioid',description:'Petaled cardioid style looping figure.'},
-            {id:3,name:'Wavy Spiral',short:'wavy',description:'Spiral with sinusoidal radial modulation.'},
-            {id:4,name:'Rotating Squares',short:'squares',description:'Sequence of rotated square outlines progressively scaled.'},
-            {id:5,name:'Pentagon Spiral',short:'penta sp',description:'Pentagon-based radial stepping spiral.'},
-            {id:6,name:'Hexagon Vortex',short:'hexa',description:'Hexagon vertices blended into swirling vortex.'},
-            {id:7,name:'Pentagon Rainbow',short:'penta rb',description:'Mock color-coded pentagon evolution (visual only).'},
-            {id:8,name:'Random Walk 1',short:'rw arc',description:'Random walk approximated with curved linking arcs.'},
-            {id:9,name:'Random Walk 2',short:'rw line',description:'Random walk with linear connections.'},
-            {id:10,name:'Accidental Butterfly',short:'butterfly',description:'Pattern resembling overlapping wings.'}
+        joy: { a: 0, r: 0, mag: 0 }, lastState: { pat: null, auto: null, run: null, brt: null }, heartbeatCount: 0,
+        patternMeta: [
+          { id: 1, name: 'Simple Spiral', short: 'spiral', description: 'Outward then inward spiral path.' },
+          { id: 2, name: 'Cardioids', short: 'cardioid', description: 'Petaled cardioid style looping figure.' },
+          { id: 3, name: 'Wavy Spiral', short: 'wavy', description: 'Spiral with sinusoidal radial modulation.' },
+          { id: 4, name: 'Rotating Squares', short: 'squares', description: 'Sequence of rotated square outlines progressively scaled.' },
+          { id: 5, name: 'Pentagon Spiral', short: 'penta sp', description: 'Pentagon-based radial stepping spiral.' },
+          { id: 6, name: 'Hexagon Vortex', short: 'hexa', description: 'Hexagon vertices blended into swirling vortex.' },
+          { id: 7, name: 'Pentagon Rainbow', short: 'penta rb', description: 'Mock color-coded pentagon evolution (visual only).' },
+          { id: 8, name: 'Random Walk 1', short: 'rw arc', description: 'Random walk approximated with curved linking arcs.' },
+          { id: 9, name: 'Random Walk 2', short: 'rw line', description: 'Random walk with linear connections.' },
+          { id: 10, name: 'Accidental Butterfly', short: 'butterfly', description: 'Pattern resembling overlapping wings.' }
         ],
         // Drawing
-        canvas:null, ctx:null, traySize:0, points:[], animating:false, animationIndex:0, animationHandle:null,
-        init(){
+        canvas: null, ctx: null, traySize: 0, points: [], animating: false, animationIndex: 0, animationHandle: null,
+        init() {
           this.canvas = this.$refs.canvas;
           this.ctx = this.canvas.getContext('2d');
           this.resizeCanvas();
-          window.addEventListener('resize', ()=> this.resizeCanvas());
+          window.addEventListener('resize', () => this.resizeCanvas());
           this.regeneratePattern();
           this.log('UI initialized');
         },
-        resizeCanvas(){
+        resizeCanvas() {
           const rect = this.$refs.tray.getBoundingClientRect();
           const size = Math.min(rect.width, rect.height);
           this.canvas.width = size; this.canvas.height = size; this.traySize = size;
           this.drawStatic();
         },
-        log(msg){
+        log(msg) {
           const t = new Date().toLocaleTimeString();
-            this.logs.push(`[${t}] ${msg}`);
-          this.$nextTick(()=>{
-            const el=this.$refs.log; el.scrollTop = el.scrollHeight;
+          this.logs.push(`[${t}] ${msg}`);
+          this.$nextTick(() => {
+            const el = this.$refs.log; el.scrollTop = el.scrollHeight;
           });
         },
-        setStatus(s){ this.statusMessage=s; this.log(s); },
-        async connect(){
-          if(!navigator.bluetooth){ this.setStatus('Web Bluetooth not supported'); return; }
-          if(this.connected || this.connecting) return;
-          this.connecting=true; this.setStatus('Requesting Sand Garden device...');
+        setStatus(s) { this.statusMessage = s; this.log(s); },
+        async connect() {
+          if (!navigator.bluetooth) { this.setStatus('Web Bluetooth not supported'); return; }
+          if (this.connected || this.connecting) return;
+          this.connecting = true; this.setStatus('Requesting Sand Garden device...');
           // UUIDs from firmware BLEConfigServer.h
           const SERVICE_UUID = '9b6c7e10-3b2c-4d8c-9d7c-5e2a6d1f8b01';
-          const SPEED_UUID   = '9b6c7e11-3b2c-4d8c-9d7c-5e2a6d1f8b01';
+          const SPEED_UUID = '9b6c7e11-3b2c-4d8c-9d7c-5e2a6d1f8b01';
           const PATTERN_UUID = '9b6c7e12-3b2c-4d8c-9d7c-5e2a6d1f8b01';
-          const STATUS_UUID  = '9b6c7e13-3b2c-4d8c-9d7c-5e2a6d1f8b01';
-          const MODE_UUID    = '9b6c7e14-3b2c-4d8c-9d7c-5e2a6d1f8b01';
-          const RUN_UUID     = '9b6c7e15-3b2c-4d8c-9d7c-5e2a6d1f8b01';
+          const STATUS_UUID = '9b6c7e13-3b2c-4d8c-9d7c-5e2a6d1f8b01';
+          const MODE_UUID = '9b6c7e14-3b2c-4d8c-9d7c-5e2a6d1f8b01';
+          const RUN_UUID = '9b6c7e15-3b2c-4d8c-9d7c-5e2a6d1f8b01';
           const TELEMETRY_UUID = '9b6c7e16-3b2c-4d8c-9d7c-5e2a6d1f8b01';
-          const COMMAND_UUID   = '9b6c7e17-3b2c-4d8c-9d7c-5e2a6d1f8b01';
+          const COMMAND_UUID = '9b6c7e17-3b2c-4d8c-9d7c-5e2a6d1f8b01';
           try {
             this.device = await navigator.bluetooth.requestDevice({
-              filters:[{ services:[SERVICE_UUID] }],
-              optionalServices:[SERVICE_UUID]
+              filters: [{ services: [SERVICE_UUID] }],
+              optionalServices: [SERVICE_UUID]
             });
-            this.device.addEventListener('gattserverdisconnected', ()=>{ this.onDisconnect(); });
+            this.device.addEventListener('gattserverdisconnected', () => { this.onDisconnect(); });
             this.setStatus('Connecting GATT...');
             this.server = await this.device.gatt.connect();
             const service = await this.server.getPrimaryService(SERVICE_UUID);
             this.setStatus('Discovering characteristics...');
-            const speedChar   = await service.getCharacteristic(SPEED_UUID);
+            const speedChar = await service.getCharacteristic(SPEED_UUID);
             const patternChar = await service.getCharacteristic(PATTERN_UUID);
-            const statusChar  = await service.getCharacteristic(STATUS_UUID);
+            const statusChar = await service.getCharacteristic(STATUS_UUID);
             // Mode/run are optional until firmware updated; wrap in try
-            let modeChar=null, runChar=null, telemetryChar=null;
-            try { modeChar = await service.getCharacteristic(MODE_UUID); } catch(_){}
-            try { runChar  = await service.getCharacteristic(RUN_UUID); } catch(_){}
-            try { telemetryChar = await service.getCharacteristic(TELEMETRY_UUID); } catch(_){ this.log('Telemetry characteristic not found (firmware older?)'); }
+            let modeChar = null, runChar = null, telemetryChar = null;
+            try { modeChar = await service.getCharacteristic(MODE_UUID); } catch (_) { }
+            try { runChar = await service.getCharacteristic(RUN_UUID); } catch (_) { }
+            try { telemetryChar = await service.getCharacteristic(TELEMETRY_UUID); } catch (_) { this.log('Telemetry characteristic not found (firmware older?)'); }
             this.chars = { speed: speedChar, pattern: patternChar, status: statusChar, mode: modeChar, run: runChar, telemetry: telemetryChar };
             // Initial reads
             await this.readInitialValues();
             // Notifications
             await Promise.all([
-              speedChar.startNotifications().then(()=>{
-                speedChar.addEventListener('characteristicvaluechanged', e=>{ this.handleSpeedNotify(e); });
+              speedChar.startNotifications().then(() => {
+                speedChar.addEventListener('characteristicvaluechanged', e => { this.handleSpeedNotify(e); });
               }),
-              patternChar.startNotifications().then(()=>{
-                patternChar.addEventListener('characteristicvaluechanged', e=>{ this.handlePatternNotify(e); });
+              patternChar.startNotifications().then(() => {
+                patternChar.addEventListener('characteristicvaluechanged', e => { this.handlePatternNotify(e); });
               }),
-              statusChar.startNotifications().then(()=>{
-                statusChar.addEventListener('characteristicvaluechanged', e=>{ this.handleStatusNotify(e); });
+              statusChar.startNotifications().then(() => {
+                statusChar.addEventListener('characteristicvaluechanged', e => { this.handleStatusNotify(e); });
               }),
-              modeChar && modeChar.startNotifications().then(()=>{
-                modeChar.addEventListener('characteristicvaluechanged', e=>{ this.handleModeNotify(e); });
-              }).catch(()=>{}),
-              runChar && runChar.startNotifications().then(()=>{
-                runChar.addEventListener('characteristicvaluechanged', e=>{ this.handleRunNotify(e); });
-              }).catch(()=>{}),
-              telemetryChar && telemetryChar.startNotifications().then(()=>{
-                telemetryChar.addEventListener('characteristicvaluechanged', e=>{ this.handleTelemetryNotify(e); });
-              }).catch(()=>{})
+              modeChar && modeChar.startNotifications().then(() => {
+                modeChar.addEventListener('characteristicvaluechanged', e => { this.handleModeNotify(e); });
+              }).catch(() => { }),
+              runChar && runChar.startNotifications().then(() => {
+                runChar.addEventListener('characteristicvaluechanged', e => { this.handleRunNotify(e); });
+              }).catch(() => { }),
+              telemetryChar && telemetryChar.startNotifications().then(() => {
+                telemetryChar.addEventListener('characteristicvaluechanged', e => { this.handleTelemetryNotify(e); });
+              }).catch(() => { })
             ]);
-            this.connected=true; this.setStatus('Connected');
+            this.connected = true; this.setStatus('Connected');
             this.log('BLE ready.');
-          } catch(err){
-            this.setStatus('Connection failed: '+ err.message);
-            this.log('Error: '+err.stack);
-          } finally { this.connecting=false; }
+          } catch (err) {
+            this.setStatus('Connection failed: ' + err.message);
+            this.log('Error: ' + err.stack);
+          } finally { this.connecting = false; }
         },
-        async readInitialValues(){
+        async readInitialValues() {
           // Firmware sends ASCII; parse accordingly
           try {
-            if(this.chars.speed){
+            if (this.chars.speed) {
               const v = await this.chars.speed.readValue();
-              const txt = this.textFromDV(v); const num=parseFloat(txt); if(!isNaN(num)) this.speedMultiplier=num;
+              const txt = this.textFromDV(v); const num = parseFloat(txt); if (!isNaN(num)) this.speedMultiplier = num;
             }
-            if(this.chars.pattern){
+            if (this.chars.pattern) {
               const v = await this.chars.pattern.readValue();
-              const txt = this.textFromDV(v); const num=parseInt(txt); if(!isNaN(num)) this.pattern=num;
+              const txt = this.textFromDV(v); const num = parseInt(txt); if (!isNaN(num)) this.pattern = num;
             }
-            if(this.chars.status){
+            if (this.chars.status) {
               const v = await this.chars.status.readValue();
               this.statusMessage = this.textFromDV(v);
             }
-            if(this.chars.mode){
+            if (this.chars.mode) {
               const v = await this.chars.mode.readValue();
-              const txt = this.textFromDV(v); const num=parseInt(txt); this.autoMode = (num===1);
+              const txt = this.textFromDV(v); const num = parseInt(txt); this.autoMode = (num === 1);
             }
-            if(this.chars.run){
+            if (this.chars.run) {
               const v = await this.chars.run.readValue();
-              const txt = this.textFromDV(v); const num=parseInt(txt); this.running = (num===1);
+              const txt = this.textFromDV(v); const num = parseInt(txt); this.running = (num === 1);
             }
-          } catch(e){ this.log('Read init failed: '+e.message); }
+          } catch (e) { this.log('Read init failed: ' + e.message); }
         },
         // Notification handlers
-        handleSpeedNotify(e){ const txt=this.textFromDV(e.target.value); const num=parseFloat(txt); if(!isNaN(num)){ this.speedMultiplier=num; this.log('Speed->'+num.toFixed(3)); } },
-        handlePatternNotify(e){ const txt=this.textFromDV(e.target.value); const num=parseInt(txt); if(!isNaN(num)){ this.pattern=num; this.regeneratePattern(); this.log('Pattern->'+num); } },
-        handleStatusNotify(e){ const txt=this.textFromDV(e.target.value); this.setStatus(txt); },
-        handleModeNotify(e){ const txt=this.textFromDV(e.target.value); const num=parseInt(txt); this.autoMode = (num===1); this.log('Mode->'+(this.autoMode?'Auto':'Manual')); },
-        handleRunNotify(e){ const txt=this.textFromDV(e.target.value); const num=parseInt(txt); this.running = (num===1); this.log('Run->'+(this.running?'Running':'Stopped')); },
-        handleTelemetryNotify(e){
-          const txt=this.textFromDV(e.target.value);
+        handleSpeedNotify(e) { const txt = this.textFromDV(e.target.value); const num = parseFloat(txt); if (!isNaN(num)) { this.speedMultiplier = num; this.log('Speed->' + num.toFixed(3)); } },
+        handlePatternNotify(e) { const txt = this.textFromDV(e.target.value); const num = parseInt(txt); if (!isNaN(num)) { this.pattern = num; this.regeneratePattern(); this.log('Pattern->' + num); } },
+        handleStatusNotify(e) { const txt = this.textFromDV(e.target.value); this.setStatus(txt); },
+        handleModeNotify(e) { const txt = this.textFromDV(e.target.value); const num = parseInt(txt); this.autoMode = (num === 1); this.log('Mode->' + (this.autoMode ? 'Auto' : 'Manual')); },
+        handleRunNotify(e) { const txt = this.textFromDV(e.target.value); const num = parseInt(txt); this.running = (num === 1); this.log('Run->' + (this.running ? 'Running' : 'Stopped')); },
+        handleTelemetryNotify(e) {
+          const txt = this.textFromDV(e.target.value);
           // Expect lines like: JOY a=12 r=-3 mag=12 | STATE pat=1 auto=1 run=1 brt=40 | HB
-          if(txt.startsWith('JOY ')){
-            const parts=Object.fromEntries(txt.substring(4).split(/\s+/).map(kv=>kv.split('=')));
-            const a=parseInt(parts.a)||0; const r=parseInt(parts.r)||0; const mag=parseInt(parts.mag)||Math.max(Math.abs(a),Math.abs(r));
-            this.joy={a,r,mag};
+          if (txt.startsWith('JOY ')) {
+            const parts = Object.fromEntries(txt.substring(4).split(/\s+/).map(kv => kv.split('=')));
+            const a = parseInt(parts.a) || 0; const r = parseInt(parts.r) || 0; const mag = parseInt(parts.mag) || Math.max(Math.abs(a), Math.abs(r));
+            this.joy = { a, r, mag };
             this.log(`JOY a=${a} r=${r} mag=${mag}`);
-          } else if(txt.startsWith('STATE ')){
-            const parts=Object.fromEntries(txt.substring(6).split(/\s+/).map(kv=>kv.split('=')));
-            const pat=parseInt(parts.pat); const auto=parts.auto==='1'; const run=parts.run==='1'; const brt=parseInt(parts.brt);
-            this.lastState={pat,auto,run,brt};
+          } else if (txt.startsWith('STATE ')) {
+            const parts = Object.fromEntries(txt.substring(6).split(/\s+/).map(kv => kv.split('=')));
+            const pat = parseInt(parts.pat); const auto = parts.auto === '1'; const run = parts.run === '1'; const brt = parseInt(parts.brt);
+            this.lastState = { pat, auto, run, brt };
             // Optionally sync if drifted
-            if(!isNaN(pat) && pat!==this.pattern) this.pattern=pat;
-            if(typeof auto==='boolean' && auto!==this.autoMode) this.autoMode=auto;
-            if(typeof run==='boolean' && run!==this.running) this.running=run;
-          } else if(txt==='HB'){
-            this.heartbeatCount++; this.log('HB '+this.heartbeatCount);
+            if (!isNaN(pat) && pat !== this.pattern) this.pattern = pat;
+            if (typeof auto === 'boolean' && auto !== this.autoMode) this.autoMode = auto;
+            if (typeof run === 'boolean' && run !== this.running) this.running = run;
+          } else if (txt === 'HB') {
+            this.heartbeatCount++; this.log('HB ' + this.heartbeatCount);
           } else {
-            this.log('TL '+txt);
+            this.log('TL ' + txt);
           }
         },
-        textFromDV(dv){ let str=''; for(let i=0;i<dv.byteLength;i++){ const c=dv.getUint8(i); if(c===0) break; str+=String.fromCharCode(c); } return str.trim(); },
-        toggleRun(){ this.running=!this.running; this.sendRun(); },
-        debouncedSendSpeed: debounce(function(){ this.sendSpeed(); }, 400),
-        async sendSpeed(){
-          this.setStatus('Speed multiplier -> '+this.speedMultiplier.toFixed(2));
-          if(this.chars.speed){
+        textFromDV(dv) { let str = ''; for (let i = 0; i < dv.byteLength; i++) { const c = dv.getUint8(i); if (c === 0) break; str += String.fromCharCode(c); } return str.trim(); },
+        toggleRun() { this.running = !this.running; this.sendRun(); },
+        debouncedSendSpeed: debounce(function () { this.sendSpeed(); }, 400),
+        async sendSpeed() {
+          this.setStatus('Speed multiplier -> ' + this.speedMultiplier.toFixed(2));
+          if (this.chars.speed) {
             try { const txt = new TextEncoder().encode(this.speedMultiplier.toFixed(3)); await this.chars.speed.writeValue(txt); }
-            catch(e){ this.log('Speed write err: '+e.message); }
+            catch (e) { this.log('Speed write err: ' + e.message); }
           }
         },
-        async sendMode(){
-          this.setStatus('Mode -> '+ (this.autoMode?'Automatic':'Manual'));
-          if(this.chars.mode){
-            try { const txt=new TextEncoder().encode(this.autoMode? '1':'0'); await this.chars.mode.writeValue(txt); }
-            catch(e){ this.log('Mode write err: '+e.message); }
+        async sendMode() {
+          this.setStatus('Mode -> ' + (this.autoMode ? 'Automatic' : 'Manual'));
+          if (this.chars.mode) {
+            try { const txt = new TextEncoder().encode(this.autoMode ? '1' : '0'); await this.chars.mode.writeValue(txt); }
+            catch (e) { this.log('Mode write err: ' + e.message); }
           }
         },
-        async sendRun(){
-          this.setStatus(this.running? 'Pattern running' : 'Pattern stopped');
-          if(this.chars.run){
-            try { const txt=new TextEncoder().encode(this.running? '1':'0'); await this.chars.run.writeValue(txt); }
-            catch(e){ this.log('Run write err: '+e.message); }
+        async sendRun() {
+          this.setStatus(this.running ? 'Pattern running' : 'Pattern stopped');
+          if (this.chars.run) {
+            try { const txt = new TextEncoder().encode(this.running ? '1' : '0'); await this.chars.run.writeValue(txt); }
+            catch (e) { this.log('Run write err: ' + e.message); }
           }
         },
         // Removed runLedSelfTest / sendCommand / direct LED color helpers (unsupported)
-        async disconnectDevice(){
-          if(this.device && this.device.gatt && this.device.gatt.connected){
-            try { this.device.gatt.disconnect(); this.setStatus('Disconnected'); } catch(e){ this.log('Disconnect err: '+e.message); }
+        async disconnectDevice() {
+          if (this.device && this.device.gatt && this.device.gatt.connected) {
+            try { this.device.gatt.disconnect(); this.setStatus('Disconnected'); } catch (e) { this.log('Disconnect err: ' + e.message); }
           }
-          this.connected=false;
+          this.connected = false;
         },
-        async reconnect(){ if(!this.device){ return this.connect(); } if(this.connected||this.connecting) return; try { this.connecting=true; this.setStatus('Reconnecting...'); await this.device.gatt.connect(); this.connecting=false; await this.connect(); } catch(e){ this.connecting=false; this.setStatus('Reconnect failed: '+e.message); } },
-        async selectPattern(id){
-          this.pattern=id; this.setStatus('Selected pattern '+id); this.regeneratePattern();
-          if(this.chars.pattern){
-            try { const txt=new TextEncoder().encode(String(id)); await this.chars.pattern.writeValue(txt); }
-            catch(e){ this.log('Pattern write err: '+e.message); }
+        async reconnect() { if (!this.device) { return this.connect(); } if (this.connected || this.connecting) return; try { this.connecting = true; this.setStatus('Reconnecting...'); await this.device.gatt.connect(); this.connecting = false; await this.connect(); } catch (e) { this.connecting = false; this.setStatus('Reconnect failed: ' + e.message); } },
+        async selectPattern(id) {
+          this.pattern = id; this.setStatus('Selected pattern ' + id); this.regeneratePattern();
+          if (this.chars.pattern) {
+            try { const txt = new TextEncoder().encode(String(id)); await this.chars.pattern.writeValue(txt); }
+            catch (e) { this.log('Pattern write err: ' + e.message); }
           }
         },
-        regeneratePattern(){ this.points = this.generatePatternPoints(this.pattern); this.drawStatic(); },
-        clearPattern(){ this.points=[]; this.drawStatic(); },
-        centerView(){ this.drawStatic(); },
-        animatePattern(){
-          if(this.animating){ cancelAnimationFrame(this.animationHandle); this.animating=false; return; }
-          this.animationIndex=0; this.animating=true; const step=()=>{
-            if(!this.animating) return; this.drawAnimated();
-            if(this.animationIndex < this.points.length) { this.animationHandle=requestAnimationFrame(step); }
-            else { this.animating=false; }
+        regeneratePattern() { this.points = this.generatePatternPoints(this.pattern); this.drawStatic(); },
+        clearPattern() { this.points = []; this.drawStatic(); },
+        centerView() { this.drawStatic(); },
+        animatePattern() {
+          if (this.animating) { cancelAnimationFrame(this.animationHandle); this.animating = false; return; }
+          this.animationIndex = 0; this.animating = true; const step = () => {
+            if (!this.animating) return; this.drawAnimated();
+            if (this.animationIndex < this.points.length) { this.animationHandle = requestAnimationFrame(step); }
+            else { this.animating = false; }
           }; step();
         },
-        drawStatic(){
-          if(!this.ctx) return; const ctx=this.ctx; const w=this.canvas.width; const h=this.canvas.height; ctx.clearRect(0,0,w,h);
+        drawStatic() {
+          if (!this.ctx) return; const ctx = this.ctx; const w = this.canvas.width; const h = this.canvas.height; ctx.clearRect(0, 0, w, h);
           // Sand texture base
-          const grad = ctx.createRadialGradient(w/2,h/2, w*0.05, w/2,h/2, w*0.5);
-          grad.addColorStop(0,'#ffffff'); grad.addColorStop(1,'#cfcfcf');
-          ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(w/2,h/2,w/2-2,0,Math.PI*2); ctx.fill();
+          const grad = ctx.createRadialGradient(w / 2, h / 2, w * 0.05, w / 2, h / 2, w * 0.5);
+          grad.addColorStop(0, '#ffffff'); grad.addColorStop(1, '#cfcfcf');
+          ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2); ctx.fill();
           // Pattern
-          if(this.points.length){ ctx.strokeStyle='#111'; ctx.lineWidth=1.2; ctx.beginPath(); this.points.forEach((p,i)=>{ const {x,y}=p; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.stroke(); }
+          if (this.points.length) { ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2; ctx.beginPath(); this.points.forEach((p, i) => { const { x, y } = p; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); }
         },
-        drawAnimated(){
-          const ctx=this.ctx; const w=this.canvas.width; const h=this.canvas.height; if(this.animationIndex===0) this.drawStatic();
-          ctx.save(); ctx.strokeStyle='#222'; ctx.lineWidth=1.4; ctx.beginPath();
-          const slice = this.points.slice(0, Math.min(this.animationIndex+2,this.points.length));
-          slice.forEach((p,i)=>{ if(i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); });
-          ctx.stroke(); ctx.restore(); this.animationIndex+=2;
+        drawAnimated() {
+          const ctx = this.ctx; const w = this.canvas.width; const h = this.canvas.height; if (this.animationIndex === 0) this.drawStatic();
+          ctx.save(); ctx.strokeStyle = '#222'; ctx.lineWidth = 1.4; ctx.beginPath();
+          const slice = this.points.slice(0, Math.min(this.animationIndex + 2, this.points.length));
+          slice.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+          ctx.stroke(); ctx.restore(); this.animationIndex += 2;
         },
-        exportImage(){ const link=document.createElement('a'); link.download='sand-pattern-'+this.pattern+'.png'; link.href=this.canvas.toDataURL('image/png'); link.click(); },
+        exportImage() { const link = document.createElement('a'); link.download = 'sand-pattern-' + this.pattern + '.png'; link.href = this.canvas.toDataURL('image/png'); link.click(); },
         // Pattern generators (simplified approximations)
-        generatePatternPoints(id){
+        generatePatternPoints(id) {
           // Constants (mirror firmware values)
           const MAX_R_STEPS = 7000;
           const STEPS_PER_A_AXIS_REV = 4096; // 2 * 2048
-          const size=this.canvas.width; const cx=size/2; const cy=size/2; const trayR=size*0.48; const pts=[];
+          const size = this.canvas.width; const cx = size / 2; const cy = size / 2; const trayR = size * 0.48; const pts = [];
 
           // Helpers matching firmware math
-          const degToSteps = d => (STEPS_PER_A_AXIS_REV/360)*d;
-          const stepsToRad = s => (s / STEPS_PER_A_AXIS_REV) * (Math.PI*2);
+          const degToSteps = d => (STEPS_PER_A_AXIS_REV / 360) * d;
+          const stepsToRad = s => (s / STEPS_PER_A_AXIS_REV) * (Math.PI * 2);
           const polarToXY = (rSteps, aSteps) => {
             const rNorm = Math.max(0, Math.min(MAX_R_STEPS, rSteps)) / MAX_R_STEPS; // clamp & normalize
             const rPx = rNorm * trayR;
             const theta = stepsToRad(aSteps);
-            return {x: cx + rPx * Math.cos(theta), y: cy + rPx * Math.sin(theta)};
+            return { x: cx + rPx * Math.cos(theta), y: cy + rPx * Math.sin(theta) };
           };
 
           // Utility to interpolate a straight line in polar (cartesian interpolation for fidelity)
-          function linePoints(pA, pB, segments=40){
+          function linePoints(pA, pB, segments = 40) {
             const aXY = polarToXY(pA.radial, pA.angular);
             const bXY = polarToXY(pB.radial, pB.angular);
-            for(let i=0;i<=segments;i++){
-              const t=i/segments;
-              pts.push({x: aXY.x + (bXY.x - aXY.x)*t, y: aXY.y + (bXY.y - aXY.y)*t});
+            for (let i = 0; i <= segments; i++) {
+              const t = i / segments;
+              pts.push({ x: aXY.x + (bXY.x - aXY.x) * t, y: aXY.y + (bXY.y - aXY.y) * t });
             }
           }
 
           // Pattern implementations translated from firmware logic (iterative simulation)
-          switch(id){
+          switch (id) {
             case 1: { // Simple Spiral
-              const angleDiv=100; const angleStep = degToSteps(360/angleDiv);
+              const angleDiv = 100; const angleStep = degToSteps(360 / angleDiv);
               const radialDiv = 10 * angleDiv; // 1000
               let radialStep = MAX_R_STEPS / radialDiv; // 7 steps approx
-              let ang=0, rad=0;
+              let ang = 0, rad = 0;
               const iterations = 4500; // enough to show in/out cycles
-              for(let i=0;i<iterations;i++){
+              for (let i = 0; i < iterations; i++) {
                 ang += angleStep;
                 rad += radialStep;
-                if(rad > MAX_R_STEPS || rad < 0){ radialStep *= -1; rad += 2*radialStep; }
+                if (rad > MAX_R_STEPS || rad < 0) { radialStep *= -1; rad += 2 * radialStep; }
                 pts.push(polarToXY(rad, ang));
               }
-              break; }
+              break;
+            }
             case 2: { // Cardioids style (large radial steps and 43° increments)
-              const radialStep = MAX_R_STEPS/8; // 875
-              let direction=1; let ang=0; let rad=0;
-              const iterations=600;
-              for(let i=0;i<iterations;i++){
-                if(i>0){
+              const radialStep = MAX_R_STEPS / 8; // 875
+              let direction = 1; let ang = 0; let rad = 0;
+              const iterations = 600;
+              for (let i = 0; i < iterations; i++) {
+                if (i > 0) {
                   ang += degToSteps(43);
-                  let nextRad = rad + direction*radialStep;
-                  if(nextRad <= MAX_R_STEPS && nextRad >= 0){ rad = nextRad; } else { direction*=-1; rad += direction*radialStep; }
+                  let nextRad = rad + direction * radialStep;
+                  if (nextRad <= MAX_R_STEPS && nextRad >= 0) { rad = nextRad; } else { direction *= -1; rad += direction * radialStep; }
                 }
                 pts.push(polarToXY(rad, ang));
               }
-              break; }
+              break;
+            }
             case 3: { // Wavy Spiral
-              const angleDiv=100; const angleStep=degToSteps(360/angleDiv); const radialDiv=10*angleDiv;
-              let radialStep = MAX_R_STEPS / radialDiv; let ang=0, rad=0;
-              const amplitude=200; const period=8; const iterations=4600;
-              for(let i=0;i<iterations;i++){
+              const angleDiv = 100; const angleStep = degToSteps(360 / angleDiv); const radialDiv = 10 * angleDiv;
+              let radialStep = MAX_R_STEPS / radialDiv; let ang = 0, rad = 0;
+              const amplitude = 200; const period = 8; const iterations = 4600;
+              for (let i = 0; i < iterations; i++) {
                 ang += angleStep; rad += radialStep;
-                if(rad > MAX_R_STEPS || rad < 0){ radialStep *= -1; rad += 2*radialStep; }
+                if (rad > MAX_R_STEPS || rad < 0) { radialStep *= -1; rad += 2 * radialStep; }
                 const wave = amplitude * Math.sin(period * stepsToRad(ang));
                 pts.push(polarToXY(rad + wave, ang));
               }
-              break; }
+              break;
+            }
             case 4: { // Rotating Squares (edges traced sequentially then rotate 10°)
               const angleShift = degToSteps(10);
-              let p1={angular:0, radial:7000}, p2={angular:degToSteps(90), radial:7000}, p3={angular:degToSteps(180), radial:7000}, p4={angular:degToSteps(270), radial:7000};
-              const squares = 28; const segmentsPerEdge=20;
-              for(let s=0;s<squares;s++){
-                linePoints(p1,p2,segmentsPerEdge);
-                linePoints(p2,p3,segmentsPerEdge);
-                linePoints(p3,p4,segmentsPerEdge);
-                linePoints(p4,p1,segmentsPerEdge);
+              let p1 = { angular: 0, radial: 7000 }, p2 = { angular: degToSteps(90), radial: 7000 }, p3 = { angular: degToSteps(180), radial: 7000 }, p4 = { angular: degToSteps(270), radial: 7000 };
+              const squares = 28; const segmentsPerEdge = 20;
+              for (let s = 0; s < squares; s++) {
+                linePoints(p1, p2, segmentsPerEdge);
+                linePoints(p2, p3, segmentsPerEdge);
+                linePoints(p3, p4, segmentsPerEdge);
+                linePoints(p4, p1, segmentsPerEdge);
                 // rotate
                 p1.angular += angleShift; p2.angular += angleShift; p3.angular += angleShift; p4.angular += angleShift;
               }
-              break; }
+              break;
+            }
             case 5: { // Pentagon Spiral (grow/shrink)
-              const vertices=5; const radialStepoverInit=500; let radialStepover=radialStepoverInit; let radius=1000; // start radius from firmware nGon call (approx)
-              const makePent = (r)=>{ const arr=[]; for(let i=0;i<vertices;i++){ const ang=degToSteps((360/vertices)*i); arr.push({radial:r, angular:ang}); } return arr; };
-              let start=0,end=1; let poly=makePent(radius);
-              const cycles=160; // number of pentagons iterations
-              for(let c=0;c<cycles;c++){
+              const vertices = 5; const radialStepoverInit = 500; let radialStepover = radialStepoverInit; let radius = 1000; // start radius from firmware nGon call (approx)
+              const makePent = (r) => { const arr = []; for (let i = 0; i < vertices; i++) { const ang = degToSteps((360 / vertices) * i); arr.push({ radial: r, angular: ang }); } return arr; };
+              let start = 0, end = 1; let poly = makePent(radius);
+              const cycles = 160; // number of pentagons iterations
+              for (let c = 0; c < cycles; c++) {
                 // traverse one edge at a time using linePoints
-                for(let edge=0; edge<vertices; edge++){
-                  start=edge; end=(edge+1)%vertices; linePoints(poly[start], poly[end], 40);
+                for (let edge = 0; edge < vertices; edge++) {
+                  start = edge; end = (edge + 1) % vertices; linePoints(poly[start], poly[end], 40);
                 }
                 // adjust radius for each vertex
                 radius += radialStepover;
-                if(radius > MAX_R_STEPS || radius < 0){ radialStepover *= -1; radius += 2*radialStepover; }
-                poly=makePent(radius);
+                if (radius > MAX_R_STEPS || radius < 0) { radialStepover *= -1; radius += 2 * radialStepover; }
+                poly = makePent(radius);
               }
-              break; }
+              break;
+            }
             case 6: { // Hexagon Vortex
-              const vertices=6; const angleShift=degToSteps(5); let radialStepover=350; let radius=1000;
-              const makeHex=(r,rot)=>{ const arr=[]; for(let i=0;i<vertices;i++){ const ang=degToSteps((360/vertices)*i)+rot; arr.push({radial:r, angular:ang}); } return arr; };
-              let rot=0; const cycles=140; for(let c=0;c<cycles;c++){
-                const hex=makeHex(radius, rot);
-                for(let i=0;i<vertices;i++){ linePoints(hex[i], hex[(i+1)%vertices], 30); }
+              const vertices = 6; const angleShift = degToSteps(5); let radialStepover = 350; let radius = 1000;
+              const makeHex = (r, rot) => { const arr = []; for (let i = 0; i < vertices; i++) { const ang = degToSteps((360 / vertices) * i) + rot; arr.push({ radial: r, angular: ang }); } return arr; };
+              let rot = 0; const cycles = 140; for (let c = 0; c < cycles; c++) {
+                const hex = makeHex(radius, rot);
+                for (let i = 0; i < vertices; i++) { linePoints(hex[i], hex[(i + 1) % vertices], 30); }
                 rot += angleShift;
-                if((radius + radialStepover >= MAX_R_STEPS + 2000) || (radius + radialStepover <= 0)) radialStepover*=-1;
+                if ((radius + radialStepover >= MAX_R_STEPS + 2000) || (radius + radialStepover <= 0)) radialStepover *= -1;
                 radius += radialStepover;
               }
-              break; }
+              break;
+            }
             case 7: { // Pentagon Rainbow (rotating, center translated to radius=4000, angle shifts 2° each iteration)
-              const vertices=5; const shiftDeg=2; const angleShift=degToSteps(shiftDeg); let shiftCounter=1;
-              const baseRadius=3000; const centerRadius=4000; const iterations=140;
-              for(let it=0; it<iterations; it++){
-                const rotation = degToSteps(shiftCounter*shiftDeg);
-                const centerAng = shiftCounter*angleShift; // translation angular component
-                for(let v=0; v<vertices; v++){
-                  const a1 = degToSteps((360/vertices)*v)+rotation;
-                  const a2 = degToSteps((360/vertices)*((v+1)%vertices))+rotation;
+              const vertices = 5; const shiftDeg = 2; const angleShift = degToSteps(shiftDeg); let shiftCounter = 1;
+              const baseRadius = 3000; const centerRadius = 4000; const iterations = 140;
+              for (let it = 0; it < iterations; it++) {
+                const rotation = degToSteps(shiftCounter * shiftDeg);
+                const centerAng = shiftCounter * angleShift; // translation angular component
+                for (let v = 0; v < vertices; v++) {
+                  const a1 = degToSteps((360 / vertices) * v) + rotation;
+                  const a2 = degToSteps((360 / vertices) * ((v + 1) % vertices)) + rotation;
                   const pA = { radial: baseRadius + centerRadius, angular: a1 + centerAng };
                   const pB = { radial: baseRadius + centerRadius, angular: a2 + centerAng };
                   linePoints(pA, pB, 25);
                 }
                 shiftCounter++;
               }
-              break; }
+              break;
+            }
             case 8: { // Random Walk 1 (arcs)
-              let ang=0, rad=MAX_R_STEPS*0.3; const steps=220;
-              for(let i=0;i<steps;i++){
+              let ang = 0, rad = MAX_R_STEPS * 0.3; const steps = 220;
+              for (let i = 0; i < steps; i++) {
                 // pick new target
-                const targetAng = Math.random()*STEPS_PER_A_AXIS_REV;
-                const targetRad = Math.random()*MAX_R_STEPS;
+                const targetAng = Math.random() * STEPS_PER_A_AXIS_REV;
+                const targetRad = Math.random() * MAX_R_STEPS;
                 // approximate arc: interpolate angle minimal distance
                 let diff = targetAng - ang; // wrap shortest
-                diff = ((diff + STEPS_PER_A_AXIS_REV/2) % STEPS_PER_A_AXIS_REV) - STEPS_PER_A_AXIS_REV/2;
-                const arcSegments=30; for(let s=1;s<=arcSegments;s++){
-                  const t=s/arcSegments; const a = ang + diff*t; const r = rad + (targetRad - rad)*t; pts.push(polarToXY(r,a)); }
-                ang = (ang + diff) % STEPS_PER_A_AXIS_REV; if(ang<0) ang+=STEPS_PER_A_AXIS_REV; rad=targetRad;
+                diff = ((diff + STEPS_PER_A_AXIS_REV / 2) % STEPS_PER_A_AXIS_REV) - STEPS_PER_A_AXIS_REV / 2;
+                const arcSegments = 30; for (let s = 1; s <= arcSegments; s++) {
+                  const t = s / arcSegments; const a = ang + diff * t; const r = rad + (targetRad - rad) * t; pts.push(polarToXY(r, a));
+                }
+                ang = (ang + diff) % STEPS_PER_A_AXIS_REV; if (ang < 0) ang += STEPS_PER_A_AXIS_REV; rad = targetRad;
               }
-              break; }
+              break;
+            }
             case 9: { // Random Walk 2 (straight lines)
-              let ang = 0, rad = MAX_R_STEPS*0.5; const steps=120;
-              for(let i=0;i<steps;i++){
-                const target = { radial: Math.random()*MAX_R_STEPS, angular: Math.random()*STEPS_PER_A_AXIS_REV };
-                linePoints({radial:rad, angular:ang}, target, 40);
+              let ang = 0, rad = MAX_R_STEPS * 0.5; const steps = 120;
+              for (let i = 0; i < steps; i++) {
+                const target = { radial: Math.random() * MAX_R_STEPS, angular: Math.random() * STEPS_PER_A_AXIS_REV };
+                linePoints({ radial: rad, angular: ang }, target, 40);
                 ang = target.angular; rad = target.radial;
               }
-              break; }
+              break;
+            }
             case 10: { // Accidental Butterfly
-              const angleDiv=100; const angleStep=degToSteps(360/angleDiv); const radialDiv=10*angleDiv;
-              let radialStep=MAX_R_STEPS/radialDiv; let ang=0, rad=0; const iterations=4600;
-              for(let i=0;i<iterations;i++){
-                ang += angleStep; rad += radialStep; if(rad>MAX_R_STEPS || rad<0){ radialStep*=-1; rad += 2*radialStep; }
+              const angleDiv = 100; const angleStep = degToSteps(360 / angleDiv); const radialDiv = 10 * angleDiv;
+              let radialStep = MAX_R_STEPS / radialDiv; let ang = 0, rad = 0; const iterations = 4600;
+              for (let i = 0; i < iterations; i++) {
+                ang += angleStep; rad += radialStep; if (rad > MAX_R_STEPS || rad < 0) { radialStep *= -1; rad += 2 * radialStep; }
                 const rOffset = 200 * Math.sin(8 * stepsToRad(ang));
-                const aOffset = degToSteps( (40/ (360/(STEPS_PER_A_AXIS_REV))) * Math.cos(3 * stepsToRad(ang)) ); // convert 40 deg amplitude to steps incorrectly? We'll approximate below
+                const aOffset = degToSteps((40 / (360 / (STEPS_PER_A_AXIS_REV))) * Math.cos(3 * stepsToRad(ang))); // convert 40 deg amplitude to steps incorrectly? We'll approximate below
                 // Simpler: aOffset in steps:
-                const aOffsetSteps = degToSteps(40 * Math.cos(3*stepsToRad(ang)) / 40); // scale down for subtlety
+                const aOffsetSteps = degToSteps(40 * Math.cos(3 * stepsToRad(ang)) / 40); // scale down for subtlety
                 pts.push(polarToXY(rad + rOffset, ang + aOffsetSteps));
               }
-              break; }
+              break;
+            }
           }
           return pts;
         }
@@ -597,9 +681,10 @@
     }
 
     // Simple debounce helper
-    function debounce(fn, wait){
-      let t; return function(...args){ clearTimeout(t); t=setTimeout(()=>fn.apply(this,args), wait); };
+    function debounce(fn, wait) {
+      let t; return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); };
     }
   </script>
 </body>
+
 </html>
