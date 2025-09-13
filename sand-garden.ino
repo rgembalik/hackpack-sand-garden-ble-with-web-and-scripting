@@ -51,18 +51,16 @@ Useful values and limits for defining how the sand garden will behave. In most c
 
 #define STEPS_PER_MOTOR_REV 2048                     // Number of motor steps in one revolution of the output shaft of the motor.
 #define STEPS_PER_A_AXIS_REV 2 * STEPS_PER_MOTOR_REV // the number of steps required to move the angular axis one full revolution
-#define TRAVEL_PER_PINION_REV 50.267                 // Distance in mm the rack moves in one complete revolution of the pinion.
+#define TRAVEL_PER_PINION_REV 50.267                 // Distance in mm the rack moves in one complete revolution of the pinion. (Informational only)
 #define STEPS_PER_MM 81.4849                         // Precomputed motor steps per mm of radial axis travel.
 #define MM_PER_STEP 1.0 / STEPS_PER_MM               // Millimeters of travel per motor step on radial axis. Evaluates to 0.01227 if STEPS_PER_REV is 2048.
 #define STEPS_PER_DEG (STEPS_PER_A_AXIS_REV) / 360   // Motor steps per degree of motion on angular axis. Should be about 11.378 steps per degree.
-#define DEG_PER_STEP 1 / STEPS_PER_DEG               // Degrees of rotation on angular axis per motor step. About .08799 degrees.
 #define STEPS_PER_RAD STEPS_PER_MOTOR_REV / PI       // Motor steps per radian of motion on angular axis. About 652.
-#define RAD_PER_STEP 1 / STEPS_PER_RAD               // Radians travelled on angular axis per motor step. About 0.00153
 
 #define ACTUAL_LEN_R_MM 87.967                           // Length in mm of the radial axis (hard limits). Derived from the CAD model of the hardware.
 #define ACTUAL_LEN_R_STEPS ACTUAL_LEN_R_MM *STEPS_PER_MM // Maximum possible length of radius in steps of motor (hard limits). Should be 7167 when 2048 steps per rev in motor.
 #define MAX_R_STEPS 7000                                 // Soft limit on how far the radius can move in terms of steps of the motor. This leaves a slight buffer on each end.
-#define MAX_R_MM MAX_R_STEPS *MM_PER_STEP                // Soft limit length in mm of the radial axis. 85.91mm.
+// (Removed unused MAX_R_MM macro)
 
 #define HOMING_BUFFER (ACTUAL_LEN_R_STEPS - MAX_R_STEPS) / 2 // Crash home R axis to 0, then move this many steps in positive direction to create a soft stop.
 #define RELAXATION_BUFFER STEPS_PER_DEG * 5                  // Crash homing tensions the bead chain, and backlash and flex in the gantry need to be released.
@@ -125,24 +123,8 @@ struct Positions
   int angular;
 };
 
-// Joystick handling with runtime calibration
-#define JOYSTICK_RAW_MAX 4095
-#define JOYSTICK_TARGET_MID 2048
-#define JOYSTICK_OFFSET_A_FALLBACK (-256)
-#define JOYSTICK_OFFSET_R_FALLBACK (-256)
-#define JOYSTICK_DEADZONE_INITIAL 600 // large to suppress movement pre-calibration
-#define JOYSTICK_DEADZONE_CAL 120     // noise band after calibration
-
-static int runtimeOffsetA = JOYSTICK_OFFSET_A_FALLBACK;
-static int runtimeOffsetR = JOYSTICK_OFFSET_R_FALLBACK;
-static int joystickDeadzone = JOYSTICK_DEADZONE_INITIAL;
-// Additional micro deadzone / trim parameters
-static const int JOYSTICK_MICRO_TRIM_BAND = 8;               // raw normalized units inside which we consider for auto-trim (<< main deadzone after calibration)
-static const int JOYSTICK_MANUAL_MOVE_THRESHOLD = 12;        // require this magnitude before commanding motion steps
-static const unsigned long JOYSTICK_TRIM_INTERVAL_MS = 4000; // how often we may adjust trim while centered
-static int trimAccumulatorA = 0;
-static int trimAccumulatorR = 0;
-static elapsedMillis sinceLastTrim;
+// Joystick manual mode threshold retained; removed unused runtime calibration scaffolding.
+static const int JOYSTICK_MANUAL_MOVE_THRESHOLD = 12; // require this magnitude before commanding motion steps
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /*
@@ -224,7 +206,6 @@ These flags are used in that state machine.
 
 int currentPattern = 1;           // default to pattern 1.
 bool runPattern = false;          // this will be the start/stop flag. true means run the selected pattern.
-bool buttonShortPressed = false;  // button pressed state flag.
 bool buttonLongPressed = false;   // for indicating long press
 bool autoMode = true;             // tracking if we're in automatic or manual mode. Defaults to auto on startup. If you want to start in manual drawing mode, set this to false.
 bool motorsEnabled = true;        // used to track if motor drivers are enabled/disabled. initializes to enabled so the homing sequence can run.
@@ -397,7 +378,7 @@ int modulus(int x, int y);                                                     /
 int findShortestPathToPosition(int current, int target, int wrapValue);             // For finding the shortest path to the new position on the angular axis
 int calcRadialChange(int angularMoveInSteps, int radialMoveInSteps);                // for figuring out the relative change on the radial axis
 int calcRadialSteps(int current, int target, int angularOffsetSteps);               // For calculating actual number of steps radial motor needs to take.
-int calculateDistanceBetweenPoints(Positions p1, Positions p2);                     // calculate distance between two points in polar coordinates. Not currently used, but useful
+// (Removed unused calculateDistanceBetweenPoints prototype)
 void homeRadius();                                                                  // for homing the radial axis on startup
 void moveToPosition(long angularSteps, long radialSteps);                           // for moving both axes to target position simultaneously.
 Positions orchestrateMotion(Positions currentPositions, Positions targetPositions); // Encapsulates steps required to move to target position and returns the new current position.
@@ -409,9 +390,7 @@ Positions readJoystick(void); // returns a struct containing the current joystic
 Positions drawLine(Positions point0, Positions point1, Positions current, int resolution, bool reset);                // For drawing a straight line between two points
 void nGonGenerator(Positions *pointArray, int numPoints, Positions centerPoint, int radius, float rotationDeg = 0.0); // generates a list of points that form a polygon's vertices
 void translatePoints(Positions *pointArray, int numPoints, Positions translationVector);                              // For moving an array of points along a vector to a new position
-void scalePoints(Positions *pointArray, int numPoints, float scaleFactor);                                            // NOT IMPLEMENTED - For scaling a shape represented by a point array up or down in size
-void rotatePoints(Positions *pointArray, int numPoints, Positions rotationCenter, float rotationDeg);                 // NOT IMPLEMENTED - For rotating a point array around an arbitrary point
-void reflectPoints(Positions *pointArray, int numPoints, Positions reflectionVector);                                 // NOT IMPLEMENTED - For reflecting a point array across an arbitrary line
+// Removed unused geometry transformation prototypes (scalePoints, rotatePoints, reflectPoints)
 
 #pragma region LedDisplayClass
 
@@ -1454,33 +1433,7 @@ hexagon generated by nGonGenerator, and use it to scale it up or down in size. I
 yet have a great idea of how to solve this problem, so I left it here as a suggestion for
 the hacker. Try your hand at solving this problem!
 */
-void scalePoints(Positions *pointArray, int numPoints, float scaleFactor)
-{
-}
-
-/*
-NOT IMPLEMENTED.
-
-The idea of this is totake in an array of points, such as one created by nGonGenerator,
-and rotate them around an arbitrary point within the drawing field. I had planned to implement this,
-but ran out of time, and have left it here as a suggestion for the hacker. Try your hand at
-solving this problem!
-*/
-void rotatePoints(Positions *pointArray, int numPoints, Positions rotationCenter, float rotationDeg)
-{
-}
-
-/*
-NOT IMPLEMENTED.
-
-The idea for this is to take in an array of points, like that generated by nGonGenerator,
-and to relect it across an arbitrary line in the drawing field. I had planned to implement this,
-but ran out of time, and have left it here as a suggestion for the hacker. Try your hand at
-solving this problem!
-*/
-void reflectPoints(Positions *pointArray, int numPoints, Positions reflectionVector)
-{
-}
+// Removed unused geometry stubs: scalePoints, rotatePoints, reflectPoints
 
 #pragma endregion GeometryGeneration
 
@@ -1612,10 +1565,7 @@ int modulus(int x, int y)
  *
  * @return int The calculated distance between the two points, rounded to the nearest integer.
  */
-int calculateDistanceBetweenPoints(Positions p1, Positions p2)
-{
-  return round(sqrt(pow(p1.radial, 2) + pow(p2.radial, 2) - 2 * p1.radial * p2.radial * cos(convertStepsToRadians(p2.angular) - convertStepsToRadians(p1.angular))));
-}
+// Removed unused function: calculateDistanceBetweenPoints
 
 #pragma endregion Math
 
