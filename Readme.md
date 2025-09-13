@@ -8,6 +8,8 @@ arduino-cli compile --fqbn arduino:esp32:nano_nora --warnings default --build-pr
 arduino-cli upload -p <PORT> --fqbn arduino:esp32:nano_nora .
 ```
 
+### Compile & upload
+
 ```bash
 arduino-cli compile --fqbn arduino:esp32:nano_nora --warnings default --build-property "compiler.cpp.extra_flags=-fpermissive" --export-binaries . &&  arduino-cli upload --fqbn arduino:esp32:nano_nora .
 ```

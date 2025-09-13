@@ -59,10 +59,35 @@ void BLEConfigServer::begin(ISGConfigListener *listener) {
 
   _service->start();
   NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
-  adv->addServiceUUID(_service->getUUID());
-  adv->setAppearance(0x0000);              // generic appearance
-  NimBLEDevice::setDeviceName(SG_DEVICE_NAME); // reinforce name
-  // Start advertising
+  // --- Advertising configuration ---
+  // Some central devices (certain Android builds, generic BLE scanners) may show
+  // "Unsupported device" when the Complete Local Name is only present in the
+  // scan response and not the first advertising packet. We force the name into
+  // the primary ADV payload (may reduce remaining bytes for other data but our
+  // payload is small).
+
+  NimBLEAdvertisementData advData;      // primary advertising payload
+  NimBLEAdvertisementData scanData;     // (kept empty for now)
+
+  // Flags (LE General Discoverable, BR/EDR not supported) - NimBLE sets this automatically
+  // but we add explicitly for clarity.
+  advData.setFlags(BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP);
+
+  // Include the service UUID (16/32/128-bit supported). This uses Complete List type.
+  advData.addServiceUUID(_service->getUUID());
+
+  // Add the complete local name in the main advertising packet (NOT only scan response).
+  advData.setName(SG_DEVICE_NAME);
+
+  // Optional: appearance set to generic (0). If you define a custom appearance, set here.
+  adv->setAppearance(0x0000);
+
+  // Apply the assembled data. Leaving scan response empty ensures centrals
+  // can show name immediately from first packet.
+  adv->setAdvertisementData(advData);
+  adv->setScanResponseData(scanData);
+
+  // Start advertising (auto-restart on disconnect is enabled by default in NimBLE-Arduino)
   adv->start();
 }
 
