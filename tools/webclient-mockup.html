@@ -238,6 +238,52 @@
           <div class="text-sm text-gray-300" x-text="patternMeta[pattern-1].description"></div>
         </div>
 
+        <!-- DSL Script Editor (custom pattern tooling) -->
+        <div class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow space-y-3">
+          <div class="flex items-center gap-3">
+            <h2 class="text-lg font-semibold">DSL Script</h2>
+            <span class="text-xs px-2 py-0.5 rounded bg-gray-700/60" x-text="compiledScript ? 'Compiled' : 'Not Compiled'"></span>
+          </div>
+          <p class="text-xs text-gray-400 leading-relaxed">Assign <code class='font-mono text-sg-accent'>next_radius</code>, <code class='font-mono text-sg-accent'>next_angle</code> or relative <code class='font-mono text-sg-accent'>delta_radius</code>, <code class='font-mono text-sg-accent'>delta_angle</code>. Inputs: <code class='font-mono'>radius</code> (cm 0–15), <code class='font-mono'>angle</code> (deg wrap 0–360), <code class='font-mono'>start</code> (1 first step), <code class='font-mono'>rev</code> (angle/360). Functions: <code class='font-mono'>sin cos abs clamp(x,a,b) sign(x)</code>. Use <code class='font-mono'>sign(cos(rev*180))</code> or similar to build arithmetic mirror / ping‑pong direction (<code class='font-mono'>dir</code>) and multiply your angular increment. All math is cm/deg; hardware conversion is automatic. Comments start with <code class='font-mono'>#</code>.</p>
+          <div class="flex flex-wrap gap-2 text-[11px]">
+            <template x-for="ex in exampleScripts" :key="ex.name">
+              <button @click="loadExample(ex)" class="px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 font-mono" x-text="ex.name"></button>
+            </template>
+            <label class="inline-flex items-center gap-1 ml-auto cursor-pointer select-none text-xs">
+              <input type="checkbox" x-model="autoRecompile" class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
+              <span>Auto-compile</span>
+            </label>
+            <label class="inline-flex items-center gap-1 cursor-pointer select-none text-xs">
+              <input type="checkbox" x-model="autoSimulate" class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
+              <span>Auto-sim</span>
+            </label>
+          </div>
+          <div class="flex gap-3 items-start">
+            <textarea x-model="scriptSource" class="w-full h-48 font-mono text-sm bg-gray-900/70 border border-gray-600 rounded p-2 focus:outline-none focus:ring-2 focus:ring-sg-accent/50 resize-y" spellcheck="false"></textarea>
+            <div class="flex flex-col gap-2 w-40">
+              <button @click="compileScript()" class="px-3 py-2 rounded bg-sg-accent hover:bg-sg-accent/80 text-sm font-medium">Compile</button>
+              <button @click="useScriptPattern()" :disabled="!compiledScript" :class="!compiledScript ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-600'" class="px-3 py-2 rounded bg-gray-700 text-sm font-medium">Use Script</button>
+              <button @click="simulateScript()" :disabled="!compiledScript" :class="!compiledScript ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-600'" class="px-3 py-2 rounded bg-gray-700 text-sm font-medium">Simulate</button>
+            </div>
+          </div>
+          <div class="flex items-center gap-4 text-xs flex-wrap">
+            <span class="text-gray-500">Used outputs: <span class="text-sg-accent" x-text="compiledScript ? compiledScript.used.filter(u=>['next_radius','next_angle','delta_radius','delta_angle'].includes(u)).join(', ') : '-' "></span></span>
+          </div>
+          <template x-if="compileErrors.length">
+            <div class="text-xs font-mono bg-red-900/40 border border-red-600/60 rounded p-2 space-y-1 overflow-auto max-h-40">
+              <template x-for="(e,i) in compileErrors" :key="i">
+                <div><span class="text-red-400" x-text="e.pos != null ? ('['+e.pos+']') : ''"></span> <span x-text="e.message"></span></div>
+              </template>
+            </div>
+          </template>
+          <template x-if="!compileErrors.length && compiledScript">
+            <div class="text-xs font-mono bg-emerald-900/30 border border-emerald-600/50 rounded p-2">
+              OK
+            </div>
+          </template>
+          <!-- Bytecode listing removed -->
+        </div>
+
       </section>
 
       <!-- Right: Visualizer -->
@@ -305,8 +351,34 @@
           { id: 7, name: 'Pentagon Rainbow', short: 'penta rb', description: 'Off-center rotating/translated pentagon.', pointsTarget: 2500 },
           { id: 8, name: 'Random Walk 1', short: 'rw arc', description: 'Random absolute targets (shortest angular path).', pointsTarget: 1800 },
           { id: 9, name: 'Random Walk 2', short: 'rw line', description: 'Random straight-line interpolation between points.', pointsTarget: 1800 },
-          { id: 10, name: 'Accidental Butterfly', short: 'butterfly', description: 'Sinusoidally modulated spiral (butterfly).', pointsTarget: 4600 }
+          { id: 10, name: 'Accidental Butterfly', short: 'butterfly', description: 'Sinusoidally modulated spiral (butterfly).', pointsTarget: 4600 },
+          { id: 11, name: 'Custom Script (DSL)', short: 'script', description: 'Your DSL compiled script.', pointsTarget: 2000 }
         ],
+        // DSL script state
+  scriptSource: `# PingPong Petals (fine-step)\n# Smaller angular/radial increments for smooth petals\ndir = sign(cos(rev*180))\nwave = sin(angle*5)*0.45 + sin(angle*9)*0.20\nbase = clamp(radius + 0.10 + wave*0.30, 0, 15)\nnext_radius = base\nnext_angle = angle + (5.5 + sin(angle*3)*1.3) * dir`,
+        compileErrors: [],
+        compiledScript: null,
+  // Continuous revolution tracking for DSL (rev variable)
+  revPrevAngleDeg: null,
+  revUnwrappedAngleDeg: 0,
+    // scriptSteps removed (infinite logical simulation); max radius locked by constant below
+  scriptMaxRadius: 15, // in cm (change in code only)
+  // showBytecode removed
+        autoRecompile: true,
+        autoSimulate: true,
+        exampleScripts: [
+  { name:'PingPongPetals', code:`# Fine-step dir flips every revolution (mirror)\ndir = sign(cos(rev*180))\nwave = sin(angle*5)*0.45 + sin(angle*9)*0.20\nbase = clamp(radius + 0.10 + wave*0.30, 0, 15)\nnext_radius = base\nnext_angle = angle + (5.5 + sin(angle*3)*1.3) * dir` },
+  { name:'MirrorSpiral', code:`# Smooth mirror spiral (out then in each revolution)\n# Continuous rev used; phase = (sin(rev*360)+1)/2 yields 0->1->0 per revolution\nphase = (sin(rev*360) + 1) * 0.5\ntarget = phase * 15\nnext_radius = clamp(radius + (target - radius)*0.30, 0, 15)\nnext_angle = angle + 5.8 + sin(angle*4)*1.0` },
+  { name:'EchoBloom', code:`# Fine-step dual-frequency bloom\nphase = sin(rev*90)*10\nring = sin(angle*4 + phase)*0.40 + sin(angle*7 - phase*0.5)*0.18\nnext_radius = clamp(7.5 + ring*6.0, 0, 15)\nnext_angle = angle + 4.5 + sin(angle*6)*0.9` },
+  { name:'BounceWeave', code:`# Fine-step radial bounce\nweave = abs(sin(angle*3))*0.55 + abs(sin(angle*11))*0.20\nnext_radius = clamp(6 + weave*6.0, 0, 15)\nnext_angle = angle + 5.8 + sin(angle*5)*1.3` },
+  { name:'StarPing', code:`# Fine-step star points with flips\ndir = sign(cos(rev*180))\narm = abs(sin(angle*2.5))*0.75 + abs(sin(angle*5))*0.28\nnext_radius = clamp(4 + arm*7.2, 0, 15)\nnext_angle = angle + (6 + sin(angle*2.5)*1.8) * dir` },
+  { name:'LaceHelix', code:`# Fine-step lace helix\nmod = sin(angle*4)*0.24 + sin(angle*9)*0.16 + sin(angle*13)*0.11\nnext_radius = clamp(radius + 0.06 + mod, 0, 15)\nnext_angle = angle + 5 + sin(angle*5)*1.5` },
+  { name:'RevCascade', code:`# Fine-step growth bursts\nphase = sign(cos(rev*180))\nnext_radius = clamp(radius + 0.08 + phase*0.12 + sin(angle*6)*0.18, 0, 15)\nnext_angle = angle + 6 + sin(angle*4)*1.2` },
+  { name:'StartBurst', code:`# Fine-step start flare then weave\nflare = start*4.5\nnext_radius = clamp(radius + flare + sin(angle*5)*0.25, 0, 15)\nnext_angle = angle + 6 + sin(angle*3)*1.4` },
+  { name:'PetalDrift', code:`# Fine-step outward drift petals\nwave = sin(angle*6)*0.42 + sin(angle*11)*0.12\nnext_radius = clamp(radius + 0.07 + wave*0.25, 0, 15)\nnext_angle = angle + 5.5 + sin(angle*4)*1.3` },
+  { name:'SelfRefWarp', code:`# Fine-step self-referential warp spiral\nnext_radius = clamp(radius + 0.14 - radius*0.008, 0, 15)\nnext_angle = angle + 5.5 + 7*sin(next_radius*10)` }
+],
+        mirrorMode: false, // new mirror mode toggle (UI control can set this)
         // Drawing
   canvas: null, ctx: null, traySize: 0, points: [],
   // Ball & trench visualization (direct stamping; no offscreen accumulation)
@@ -500,7 +572,7 @@
           }
         },
         regeneratePattern() {
-          this.points = this.generatePatternPoints(this.pattern);
+         this.points = this.generatePatternPoints(this.pattern);
           this.computePathMetrics();
           this.simulationDistance = 0; this.segmentIndex = 0; this.lastDrawnSegmentIndex = 0;
           this.resetTrail();
@@ -922,6 +994,41 @@
                 // Firmware logic: target.radial += rOffset; target.angular += aOffset; where aOffset amplitude is 40 steps.
                 return { radial: Math.round(rad + rOffset), angular: Math.round(ang + aOffset) };
               };
+            },
+            11: () => { // Custom DSL Script (units radius: cm, angle: degrees, rev continuous)
+              const stepsPerRev = STEPS_PER_A_AXIS_REV;
+              const degToSteps = stepsPerRev / 360;
+              const maxRadiusCm = this.scriptMaxRadius;
+              const stepsPerCm = MAX_R_STEPS / maxRadiusCm;
+              // Reset rev tracking on new factory creation
+              this.revPrevAngleDeg = null; this.revUnwrappedAngleDeg = 0;
+              return (current, restart) => {
+                if (!this.compiledScript) return current;
+                const currentRadiusCm = current.radial / stepsPerCm;
+                const currentAngleDeg = (current.angular / stepsPerRev) * 360;
+                // Update continuous revolution accumulator
+                if (restart || this.revPrevAngleDeg == null) {
+                  this.revPrevAngleDeg = currentAngleDeg; this.revUnwrappedAngleDeg = currentAngleDeg; // start from actual
+                } else {
+                  let delta = currentAngleDeg - this.revPrevAngleDeg;
+                  if (delta > 180) delta -= 360; else if (delta < -180) delta += 360; // shortest path
+                  this.revUnwrappedAngleDeg += delta;
+                  this.revPrevAngleDeg = currentAngleDeg;
+                }
+                const rev = this.revUnwrappedAngleDeg / 360;
+                const vars = { radius: currentRadiusCm, angle: currentAngleDeg, start: restart ? 1 : 0, rev };
+                const values = evalDSLCompiled(this.compiledScript, vars);
+                function has(v){ return v!=null && isFinite(v); }
+                let outRadiusCm = currentRadiusCm;
+                if (has(values.next_radius)) outRadiusCm = values.next_radius; else if (has(values.delta_radius)) outRadiusCm = currentRadiusCm + values.delta_radius;
+                let outAngleDeg = currentAngleDeg;
+                if (has(values.next_angle)) outAngleDeg = values.next_angle; else if (has(values.delta_angle)) outAngleDeg = currentAngleDeg + values.delta_angle;
+                outRadiusCm = Math.max(0, Math.min(maxRadiusCm, outRadiusCm));
+                outAngleDeg = ((outAngleDeg % 360) + 360) % 360;
+                const radialSteps = Math.round(outRadiusCm * stepsPerCm);
+                const angleSteps = Math.round(outAngleDeg * degToSteps) % stepsPerRev;
+                return { radial: radialSteps, angular: angleSteps };
+              };
             }
           };
 
@@ -950,6 +1057,170 @@
     // Simple debounce helper
     function debounce(fn, wait) {
       let t; return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); };
+    }
+
+    // -------- DSL Compiler & Evaluator (Unified) --------
+    const DSG_OP = { CONST:'CONST', LOAD:'LOAD', ADD:'ADD', SUB:'SUB', MUL:'MUL', DIV:'DIV', NEG:'NEG', SIN:'SIN', COS:'COS', ABS:'ABS', CLAMP:'CLAMP', SIGN:'SIGN', END:'END' };
+  // Added 'rev' synthetic input (angle/360) for revolution-based patterns.
+  const DSG_INPUTS = ['radius','angle','start','rev'];
+    const DSG_OUTPUTS = ['next_radius','next_angle','delta_radius','delta_angle'];
+    const DSG_FUNCS = { sin:1, cos:1, abs:1, clamp:3, sign:1 };
+  const DSG_CONSTS = { };
+
+    function tokenizeDSL(source){
+      const lines=source.replace(/\r\n?/g,'\n').split(/\n/); const tokens=[]; let global=0; const errors=[];
+      const push=(type,value,pos)=>tokens.push({type,value,pos});
+      for(const line of lines){
+        if(/^\s*#/.test(line)){ global+=line.length+1; continue; }
+        let i=0; let hadCode=false;
+        while(i<line.length){
+          const c=line[i]; const pos=global+i;
+          if(/[ \t]/.test(c)){ i++; continue; }
+          if(c=='#') break;
+          if(/[0-9]/.test(c)){
+            let j=i+1; while(j<line.length && /[0-9]/.test(line[j])) j++; if(j<line.length && line[j]=='.'){ j++; while(j<line.length && /[0-9]/.test(line[j])) j++; }
+            push('NUMBER', parseFloat(line.slice(i,j)), pos); i=j; hadCode=true; continue;
+          }
+          if(/[a-zA-Z_]/.test(c)){
+            let j=i+1; while(j<line.length && /[a-zA-Z0-9_]/.test(line[j])) j++;
+            push('IDENT', line.slice(i,j), pos); i=j; hadCode=true; continue;
+          }
+            if('+-*/=(),'.includes(c)){ push(c,c,pos); i++; hadCode=true; continue; }
+          errors.push({message:'Unexpected char '+c,pos}); i++;
+        }
+        if(hadCode) push('EOL','EOL', global+line.length-1);
+        global+=line.length+1;
+      }
+      return {tokens, errors};
+    }
+  function compileDSL(source){
+      const {tokens, errors} = tokenizeDSL(source); if(errors.length) return {ok:false, errors};
+  let idx=0; const assignments={}; const usedOrder=[]; const definedOutputs=new Set(); const localVars=new Set();
+      const peek=()=>tokens[idx]; const consume=t=>{ const tk=peek(); if(!tk||tk.type!==t){ errors.push({message:'Expected '+t,pos:tk?tk.pos:-1}); return null;} idx++; return tk; };
+      function parseExpression(){
+        const output=[]; const stack=[]; let expectValue=true; const prec=o=>o==='+'||o==='-'?1:(o==='*'||o==='/'?2:0); const isOp=t=>['+','-','*','/'].includes(t);
+        while(true){ const tk=peek(); if(!tk) break; if(tk.type==='EOL') { break; }
+          if(tk.type==='NUMBER'){ output.push(tk); idx++; expectValue=false; continue; }
+          if(tk.type==='IDENT'){ const next=tokens[idx+1]; if(next && next.type==='('){ stack.push(tk); idx+=2; stack.push({type:'('}); expectValue=true; continue; } output.push(tk); idx++; expectValue=false; continue; }
+          if(tk.type==='('){ stack.push(tk); idx++; expectValue=true; continue; }
+          if(tk.type===')'){ while(stack.length && stack[stack.length-1].type!=='('){ output.push(stack.pop()); } if(!stack.length){ errors.push({message:'Mismatched )',pos:tk.pos}); idx++; break; } stack.pop(); if(stack.length && stack[stack.length-1].type==='IDENT'){ output.push(stack.pop()); } idx++; expectValue=false; continue; }
+          if(tk.type===','){ while(stack.length && stack[stack.length-1].type!=='('){ output.push(stack.pop()); } if(!stack.length){ errors.push({message:'Misplaced comma',pos:tk.pos}); } idx++; expectValue=true; continue; }
+          if(isOp(tk.type)){ let op=tk.type; if(op==='-' && expectValue){ stack.push({type:'NEG',pos:tk.pos}); idx++; continue; } while(stack.length){ const top=stack[stack.length-1]; if(isOp(top.type) && prec(top.type) >= prec(op)){ output.push(stack.pop()); } else break; } stack.push(tk); idx++; expectValue=true; continue; }
+          break; }
+        while(stack.length){ const s=stack.pop(); if(s.type==='(') errors.push({message:'Mismatched (',pos:s.pos}); else output.push(s); }
+        // consume trailing EOL(s)
+        while(peek() && peek().type==='EOL') idx++;
+        return output; }
+  function rpnToBytecode(rpn, definedLocals){ const bc=[]; for(const tk of rpn){ if(!tk) continue; if(tk.type==='NUMBER'){ bc.push({op:DSG_OP.CONST,v:tk.value}); continue; } if(tk.type==='IDENT'){ const nm=tk.value; if(DSG_CONSTS[nm] != null){ bc.push({op:DSG_OP.CONST,v:DSG_CONSTS[nm]}); continue; } if(DSG_FUNCS[nm]!=null){ switch(nm){ case 'sin': bc.push({op:DSG_OP.SIN}); break; case 'cos': bc.push({op:DSG_OP.COS}); break; case 'abs': bc.push({op:DSG_OP.ABS}); break; case 'clamp': bc.push({op:DSG_OP.CLAMP}); break; case 'sign': bc.push({op:DSG_OP.SIGN}); break; } continue; } if(DSG_INPUTS.includes(nm)){ bc.push({op:DSG_OP.LOAD,v:nm}); continue; } if(DSG_OUTPUTS.includes(nm)){ if(!definedOutputs.has(nm)){ errors.push({message:'Output '+nm+' used before it is assigned earlier in script',pos:tk.pos}); } bc.push({op:DSG_OP.LOAD,v:nm}); continue; } if(definedLocals.has(nm)){ bc.push({op:DSG_OP.LOAD,v:nm}); continue; } errors.push({message:'Unknown identifier '+nm,pos:tk.pos}); continue; } if(['+','-','*','/'].includes(tk.type)){ bc.push({op:{'+':DSG_OP.ADD,'-':DSG_OP.SUB,'*':DSG_OP.MUL,'/':DSG_OP.DIV}[tk.type]}); continue; } if(tk.type==='NEG'){ bc.push({op:DSG_OP.NEG}); continue; } } bc.push({op:DSG_OP.END}); return bc; }
+      while(idx < tokens.length && !errors.length){
+        // skip stray EOLs
+        while(peek() && peek().type==='EOL') idx++;
+        const lhs=peek(); if(!lhs) break;
+        if(lhs.type==='IDENT'){
+          const name=lhs.value; idx++;
+            if(!consume('=')) break;
+            const rpn=parseExpression();
+            const bc=rpnToBytecode(rpn, localVars);
+            if(DSG_OUTPUTS.includes(name)){
+              assignments[name]=bc; if(!usedOrder.includes(name)) usedOrder.push(name); definedOutputs.add(name);
+            } else if(DSG_INPUTS.includes(name)) {
+              errors.push({message:'Cannot assign to read-only input '+name,pos:lhs.pos}); break; }
+            else {
+              assignments[name]=bc; if(!usedOrder.includes(name)) usedOrder.push(name); localVars.add(name);
+            }
+        } else {
+          errors.push({message:'Unexpected token',pos:lhs.pos}); break;
+        }
+      }
+      if(!usedOrder.length && !errors.length) errors.push({message:'No assignments found',pos:0}); if(errors.length) return {ok:false, errors}; return {ok:true, script:{assignments, used:usedOrder, locals:[...localVars]}}; }
+    function evalDSLCompiled(compiled, baseVars){
+      // Evaluate in source order so later outputs can reference earlier outputs.
+      const env = { ...baseVars }; const out={};
+      function run(bc){
+        const st=[];
+        for(const ins of bc){
+          switch(ins.op){
+            case DSG_OP.CONST: st.push(ins.v); break;
+            case DSG_OP.LOAD: st.push(env[ins.v] ?? 0); break;
+            case DSG_OP.ADD: { const b=st.pop(), a=st.pop(); st.push(a+b); break; }
+            case DSG_OP.SUB: { const b=st.pop(), a=st.pop(); st.push(a-b); break; }
+            case DSG_OP.MUL: { const b=st.pop(), a=st.pop(); st.push(a*b); break; }
+            case DSG_OP.DIV: { const b=st.pop(), a=st.pop(); st.push(b===0?0:a/b); break; }
+            case DSG_OP.NEG: { const a=st.pop(); st.push(-a); break; }
+            case DSG_OP.SIN: { const a=st.pop(); st.push(Math.sin(a * Math.PI / 180)); break; } // degree-based
+            case DSG_OP.COS: { const a=st.pop(); st.push(Math.cos(a * Math.PI / 180)); break; } // degree-based
+            case DSG_OP.ABS: { const a=st.pop(); st.push(Math.abs(a)); break; }
+            case DSG_OP.CLAMP: { const c=st.pop(), b=st.pop(), a=st.pop(); st.push(Math.min(Math.max(a,b),c)); break; }
+            case DSG_OP.SIGN: { const a=st.pop(); st.push(a>0?1:(a<0?-1:0)); break; }
+            case DSG_OP.END: return st.pop() || 0;
+          }
+        }
+        return 0;
+      }
+      for(const name of compiled.used){
+        const val = run(compiled.assignments[name]);
+        out[name] = val; env[name] = val; // expose to subsequent expressions
+      }
+      return out;
+    }
+    function formatBytecodeListing(bc){ return bc.map(ins=>{ if(ins.v!=null) return ins.op+' '+ins.v; return ins.op; }).join('\n'); }
+
+    document.addEventListener('alpine:init', () => {
+      const orig = sandGardenApp; window.sandGardenApp = function(){ const base = orig(); return Object.assign(base, {
+        formatBytecode(bc){ return formatBytecodeListing(bc); },
+        loadExample(ex){ this.scriptSource = ex.code; if(this.autoRecompile){ this.compileScript(); if(this.autoSimulate) this.simulateScript(); } },
+        compileScript(){ const res=compileDSL(this.scriptSource); if(!res.ok){ this.compileErrors=res.errors.map(e=>({message:enhanceErrorMessage(e.message), pos:e.pos})); this.compiledScript=null; } else { this.compileErrors=[]; this.compiledScript=res.script; if(this.autoSimulate) this.simulateScript(); } },
+        useScriptPattern(){ if(!this.compiledScript) return; this.pattern=11; this.setStatus('Using custom script'); this.regeneratePattern(); },
+        simulateScript(){ if(!this.compiledScript){ this.setStatus('Compile first'); return; } if(this.pattern!==11) this.pattern=11; this.regeneratePattern(); },
+  evalCompiledScript(current, startFlag, MAX_R_STEPS, STEPS_PER_A_AXIS_REV){
+    // Standalone evaluator variant (mirrors factory 11 logic) for preview mode.
+    if(!this.compiledScript) return current;
+    const stepsPerRev = STEPS_PER_A_AXIS_REV;
+    const degToSteps = stepsPerRev / 360;
+    const maxRadiusCm = this.scriptMaxRadius;
+    const stepsPerCm = MAX_R_STEPS / maxRadiusCm;
+    const currentRadiusCm = current.radial / stepsPerCm;
+    const currentAngleDeg = (current.angular / stepsPerRev) * 360;
+    // Continuous rev tracking (unwrapped angle)
+    if(startFlag || this.revPrevAngleDeg == null){
+      this.revPrevAngleDeg = currentAngleDeg;
+      this.revUnwrappedAngleDeg = currentAngleDeg; // start from actual angle (prevents jump if not zero)
+    } else {
+      let delta = currentAngleDeg - this.revPrevAngleDeg;
+      if(delta > 180) delta -= 360; else if(delta < -180) delta += 360;
+      this.revUnwrappedAngleDeg += delta;
+      this.revPrevAngleDeg = currentAngleDeg;
+    }
+    const rev = this.revUnwrappedAngleDeg / 360;
+    const vars = { radius: currentRadiusCm, angle: currentAngleDeg, start: startFlag?1:0, rev };
+    const values = evalDSLCompiled(this.compiledScript, vars);
+    function has(v){ return v!=null && isFinite(v); }
+    let outRadiusCm = currentRadiusCm;
+    if(has(values.next_radius)) outRadiusCm = values.next_radius; else if(has(values.delta_radius)) outRadiusCm = currentRadiusCm + values.delta_radius;
+    let outAngleDeg = currentAngleDeg;
+    if(has(values.next_angle)) outAngleDeg = values.next_angle; else if(has(values.delta_angle)) outAngleDeg = currentAngleDeg + values.delta_angle;
+    // Mirror mode: reflect angle every other revolution (odd rev index flips direction across revolution midpoint)
+    if(this.mirrorMode){
+      const revIndex = Math.floor(vars.rev);
+      if(revIndex % 2 === 1){
+        const revStart = revIndex * 360;
+        const offset = outAngleDeg - revStart;
+        outAngleDeg = revStart + (360 - offset);
+      }
+    }
+    outRadiusCm = Math.max(0, Math.min(maxRadiusCm, outRadiusCm));
+    outAngleDeg = ((outAngleDeg % 360)+360)%360;
+    const radialSteps = Math.round(outRadiusCm * stepsPerCm);
+    const angleSteps = Math.round(outAngleDeg * degToSteps) % stepsPerRev;
+    return { radial: radialSteps, angular: angleSteps };
+  }
+      }); };
+    });
+
+    function enhanceErrorMessage(msg){
+      if(/used before it is assigned/.test(msg)) return msg + ' (move its assignment above or reference the input variable instead).';
+      if(/Invalid assignment target/.test(msg)) return msg + ' (allowed: next_radius, next_angle, delta_radius, delta_angle).';
+      return msg;
     }
   </script>
 </body>
