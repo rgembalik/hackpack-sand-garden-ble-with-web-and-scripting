@@ -187,11 +187,7 @@
                 class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
               <span class="text-sm">Automatic Mode</span>
             </label>
-            <label class="inline-flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" x-model="showTrails"
-                class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
-              <span class="text-sm">Show Trails</span>
-            </label>
+            <!-- Show Trails option removed (always on) -->
           </div>
           <div class="flex gap-3">
             <button type="button" @click="centerView()"
@@ -263,22 +259,19 @@
                 class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600">Regenerate</button>
               <button @click="toggleSimulation()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600"
                 x-text="simulationRunning ? 'Pause' : 'Play'"></button>
+              <button @click="stepOnce()" :disabled="simulationRunning || points.length<2" :class="(simulationRunning||points.length<2)?'opacity-40 cursor-not-allowed':'hover:bg-gray-600'" class="px-3 py-1.5 rounded bg-gray-700 text-white">Step</button>
               <button @click="exportImage()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600">Export</button>
-              <label class="inline-flex items-center gap-1 cursor-pointer select-none ml-auto">
-                <input type="checkbox" x-model="showTrails" @change="onShowTrailsChange()"
-                  class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
-                <span>Show Trails</span>
-              </label>
+              <!-- Show Trails checkbox removed: trails now always enabled -->
             </div>
           </div>
         </section>
 
-        <!-- DSL Panel -->
+  <!-- Sandscript Panel (formerly DSL) -->
         <section class="space-y-6 xl:col-span-2 xl:col-start-2">
           <div
             class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow space-y-3">
             <div class="flex items-center gap-3">
-              <h2 class="text-lg font-semibold">DSL Script</h2>
+              <h2 class="text-lg font-semibold">Sandscript</h2>
               <span class="text-xs px-2 py-0.5 rounded bg-gray-700/60"
                 x-text="compiledScript ? 'Compiled' : 'Not Compiled'"></span>
               <button @click="showDSLDetails=!showDSLDetails"
@@ -290,13 +283,14 @@
                 class='font-mono text-sg-accent'>next_angle</code>, <code
                 class='font-mono text-sg-accent'>delta_radius</code>, <code
                 class='font-mono text-sg-accent'>delta_angle</code>. Inputs: <code class='font-mono'>radius</code>,
-              <code class='font-mono'>angle</code>, <code class='font-mono'>rev</code>, <code
-                class='font-mono'>start</code>. Functions: <code class='font-mono'>sin cos abs clamp sign</code>. Trig
-              uses degrees.</p>
+              <code class='font-mono'>angle</code>, <code class='font-mono'>steps</code>, <code class='font-mono'>time</code>, <code class='font-mono'>start</code>, <code class='font-mono'>rev</code><span class="text-gray-500">(legacy)</span>. Functions: <code class='font-mono'>sin cos abs clamp sign</code>. Trig
+              uses degrees. <span class="text-sg-accent/80">steps</span> = evaluation count since start (0-based), <span class="text-sg-accent/80">time</span> = ms since script start (approx in browser).</p>
             <div class="flex flex-wrap gap-2 text-[11px]">
               <template x-for="ex in exampleScripts" :key="ex.name">
-                <button @click="loadExample(ex)" class="px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 font-mono"
-                  x-text="ex.name"></button>
+                <button @click="loadExample(ex)"
+                  :class="'relative px-2 py-1 rounded font-mono transition ' + (ex.final ? 'bg-gray-700 hover:bg-gray-600 border border-sg-accent/50' : 'bg-gray-700 hover:bg-gray-600')">
+                  <span x-text="ex.name"></span>
+                </button>
               </template>
               <label class="inline-flex items-center gap-1 ml-auto cursor-pointer select-none text-xs">
                 <input type="checkbox" x-model="autoRecompile"
@@ -349,6 +343,8 @@
                     <ul class="space-y-0.5 font-mono">
                       <li>radius: <span x-text="fmtNum(lastDSLInputs.radius)"></span></li>
                       <li>angle: <span x-text="fmtNum(lastDSLInputs.angle)"></span></li>
+                      <li>steps: <span x-text="lastDSLInputs.steps"></span></li>
+                      <li>time(ms): <span x-text="fmtNum(lastDSLInputs.time)"></span></li>
                       <li>rev: <span x-text="fmtNum(lastDSLInputs.rev)"></span></li>
                       <li>start: <span x-text="lastDSLInputs.start"></span></li>
                     </ul>
@@ -375,6 +371,19 @@
                     <p class="italic text-gray-500">(no eval yet)</p>
                   </template>
                 </div>
+                <div class="sm:col-span-2">
+                  <h4 class="font-semibold text-sg-accent mb-1">Last Locals</h4>
+                  <template x-if="lastDSLLocals && Object.keys(lastDSLLocals).length">
+                    <ul class="space-y-0.5 font-mono columns-2 gap-6">
+                      <template x-for="(v,k) in lastDSLLocals" :key="k">
+                        <li><span class="text-gray-400" x-text="k"></span>: <span x-text="fmtNum(v)"></span></li>
+                      </template>
+                    </ul>
+                  </template>
+                  <template x-if="!lastDSLLocals || !Object.keys(lastDSLLocals).length">
+                    <p class="italic text-gray-500">(no locals)</p>
+                  </template>
+                </div>
               </div>
             </div>
         </section>
@@ -398,7 +407,7 @@
         autoMode: true,
         speedMultiplier: 1.0,
         pattern: 1,
-        showTrails: true,
+  // Trails always enabled now (formerly showTrails toggle removed)
         statusMessage: 'Idle',
         logs: [],
         device: null, server: null,
@@ -417,10 +426,10 @@
           { id: 8, name: 'Random Walk 1', short: 'rw arc', description: 'Random absolute targets (shortest angular path).', pointsTarget: 1800 },
           { id: 9, name: 'Random Walk 2', short: 'rw line', description: 'Random straight-line interpolation between points.', pointsTarget: 1800 },
           { id: 10, name: 'Accidental Butterfly', short: 'butterfly', description: 'Sinusoidally modulated spiral (butterfly).', pointsTarget: 4600 },
-          { id: 11, name: 'Custom Script (DSL)', short: 'script', description: 'Your DSL compiled script.', pointsTarget: 2000 }
+          { id: 11, name: 'Sandscript', short: 'script', description: 'Your custom Sandscript.', pointsTarget: 2000 }
         ],
-        // DSL script state
-        scriptSource: `# PingPong Petals (fine-step)\n# Smaller angular/radial increments for smooth petals\ndir = sign(cos(rev*180))\nwave = sin(angle*5)*0.45 + sin(angle*9)*0.20\nbase = clamp(radius + 0.10 + wave*0.30, 0, 15)\nnext_radius = base\nnext_angle = angle + (5.5 + sin(angle*3)*1.3) * dir`,
+  // Sandscript state (internal variables still prefixed dsl for now)
+  scriptSource: `# PingPong Petals (steps-based fine-step)\n# Direction flips every ~400 steps using cosine square wave via sign(cos())\ndir = sign(cos(steps*0.45))\nwave = sin(angle*5)*0.45 + sin(angle*9)*0.20\nbase = clamp(radius + 0.10 + wave*0.30, 0, 15)\nnext_radius = base\nnext_angle = angle + (5.5 + sin(angle*3)*1.3) * dir`,
         compileErrors: [],
         compiledScript: null,
         // Continuous revolution tracking for DSL (rev variable)
@@ -432,13 +441,28 @@
         autoRecompile: true,
         autoSimulate: true,
         exampleScripts: [
-          { name: 'PingPongPetals', code: `# Fine-step dir flips every revolution (mirror)\ndir = sign(cos(rev*180))\nwave = sin(angle*5)*0.45 + sin(angle*9)*0.20\nbase = clamp(radius + 0.10 + wave*0.30, 0, 15)\nnext_radius = base\nnext_angle = angle + (5.5 + sin(angle*3)*1.3) * dir` },
-          { name: 'MirrorSpiral', code: `# Simple outward/inward spiral mimic (no % operator)\n# Triangle wave using cosine (period = 2 revs)\n# tri = 0.5 * (1 - cos(rev*180)) gives 0->1 (rev 0-1), 1->0 (rev 1-2)\ntri = 0.5 * (1 - cos(rev*180))\n# Target radius\ntarget = tri * 15\n# Ease toward target (adjust smoothing factor 0.18)\nnext_radius = clamp(radius + (target - radius)*0.18, 0, 15)\n# Constant angular increment (adjust for density)\nnext_angle = angle + 5.0` },
-          { name: 'Butterfly', code: `# Nice butterfly effect\nphase = sin(rev*90)*10\nring = sin(angle*4 + phase)*0.40 + sin(angle*7 - phase*0.5)*0.18\nnext_radius = clamp(7.5 + ring*6.0, 0, 15)\nnext_angle = angle + 4.5 + sin(angle*6)*0.9` },
+          { name: 'PingPongPetals', code: `# Fine-step dir flips every ~400 steps (mirror)\n# 360/0.45 ≈ 800 step period -> flips half-period ~400\ndir = sign(cos(steps*0.45))\nwave = sin(angle*5)*0.45 + sin(angle*9)*0.20\nbase = clamp(radius + 0.10 + wave*0.30, 0, 15)\nnext_radius = base\nnext_angle = angle + (5.5 + sin(angle*3)*1.3) * dir` },
+          { final: true, name: 'MirrorSpiral', code: `# Simple outward/inward spiral mimic (no % operator)
+# Triangle wave using cosine (period = 2 revs)
+# tri = 0.5 * (1 - cos(rev*180)) gives 0->1 (rev 0-1), 1->0 (rev 1-2)
+tri = 0.5 * (1 - cos(rev*180 / 8))
+# Target radius
+target = tri * 15
+# Ease toward target (adjust smoothing factor 0.18)
+next_radius = clamp(radius + (target - radius)*0.18, 0, 15)
+# Constant angular increment (adjust for density)
+next_angle = angle + 15.0` },
+          { final: true, name: 'Butterfly', code: `# Nice butterfly effect\nphase = sin(rev*90)*10\nring = sin(angle*4 + phase)*0.40 + sin(angle*7 - phase*0.5)*0.18\nnext_radius = clamp(7.5 + ring*6.0, 0, 15)\nnext_angle = angle + 4.5 + sin(angle*6)*0.9` },
           { name: 'BounceWeave', code: `# Fine-step radial bounce\nweave = abs(sin(angle*3))*0.55 + abs(sin(angle*11))*0.20\nnext_radius = clamp(6 + weave*6.0, 0, 15)\nnext_angle = angle + 5.8 + sin(angle*5)*1.3` },
-          { name: 'StarPing', code: `# Fine-step star points with flips\ndir = sign(cos(rev*180))\narm = abs(sin(angle*2.5))*0.75 + abs(sin(angle*5))*0.28\nnext_radius = clamp(4 + arm*7.2, 0, 15)\nnext_angle = angle + (6 + sin(angle*2.5)*1.8) * dir` },
+          { final: true,name: 'StarPing', code: `# Fine-step star points with directional and radial flips via steps
+# Use lower frequency for broader lobes
+osciradius = sin(steps/2) * 4
+dir = sign(cos(steps*0.30))
+arm = abs(sin(angle*2.5))*0.75 + abs(sin(angle*5))*0.28
+next_radius = clamp(4 + arm*7.2, 0, 15) + osciradius 
+next_angle = angle + (6 + sin(angle*2.5)*1.8) * dir` },
           { name: 'LaceHelix', code: `# Fine-step lace helix\nmod = sin(angle*4)*0.24 + sin(angle*9)*0.16 + sin(angle*13)*0.11\nnext_radius = clamp(radius + 0.06 + mod, 0, 15)\nnext_angle = angle + 5 + sin(angle*5)*1.5` },
-          { name: 'RevCascade', code: `# Fine-step growth bursts\nphase = sign(cos(rev*180))\nnext_radius = clamp(radius + 0.08 + phase*0.12 + sin(angle*6)*0.18, 0, 15)\nnext_angle = angle + 6 + sin(angle*4)*1.2` },
+          { name: 'RevCascade', code: `# Fine-step growth bursts (steps-based)\nphase = sign(cos(steps*0.40))\nnext_radius = clamp(radius + 0.08 + phase*0.12 + sin(angle*6)*0.18, 0, 15)\nnext_angle = angle + 6 + sin(angle*4)*1.2` },
           { name: 'StartBurst', code: `# Fine-step start flare then weave\nflare = start*4.5\nnext_radius = clamp(radius + flare + sin(angle*5)*0.25, 0, 15)\nnext_angle = angle + 6 + sin(angle*3)*1.4` },
           { name: 'PetalDrift', code: `# Fine-step outward drift petals\nwave = sin(angle*6)*0.42 + sin(angle*11)*0.12\nnext_radius = clamp(radius + 0.07 + wave*0.25, 0, 15)\nnext_angle = angle + 5.5 + sin(angle*4)*1.3` },
           { name: 'SelfRefWarp', code: `# Fine-step self-referential warp spiral\nnext_radius = clamp(radius + 0.14 - radius*0.008, 0, 15)\nnext_angle = angle + 5.5 + 7*sin(next_radius*10)` }
@@ -447,6 +471,14 @@
         showDSLDetails: false,
         lastDSLInputs: null,
         lastDSLOutputs: null,
+  lastDSLLocals: null,
+    // DSL temporal counters
+    dslStepCounter: 0, // increments per DSL evaluation (pattern 11)
+    dslStartTimestamp: null, // performance.now() when DSL pattern generation started
+  // Sequences for per-step DSL inputs/outputs (pattern 11 only)
+  dslInputsSeq: [],
+  dslOutputsSeq: [],
+  dslLocalsSeq: [],
         fmtNum(n) { if (n == null || !isFinite(n)) return '-'; return (Math.abs(n) < 0.001 ? n.toExponential(2) : n.toFixed(3)).replace(/\.0+$/, '').replace(/(\.[0-9]*?)0+$/, '$1'); },
         // Drawing
         canvas: null, ctx: null, traySize: 0, points: [],
@@ -456,6 +488,7 @@
         trailInitialized: false, ballPrevImage: null, ballPrevBox: null,
         // simulation timing (distance based)
         simulationRunning: false, linearSpeed: 300, lastTs: 0,
+  wasSimulationRunningBeforeHide: false, // track pre-visibility state for auto-resume
         simulationDistance: 0, totalPathLength: 0,
         segmentLengths: [], segmentEndDistances: [], segmentIndex: 0,
         segmentPolar: [], // per segment polar interpolation data {r0,r1,dr,theta0,theta1,dθ,length}
@@ -467,8 +500,32 @@
           this.ctx = this.canvas.getContext('2d');
           this.resizeCanvas();
           window.addEventListener('resize', () => this.resizeCanvas());
+          // Auto-pause when tab hidden (will implement logic in onVisibilityChange)
+          document.addEventListener('visibilitychange', () => this.onVisibilityChange());
           this.regeneratePattern();
           this.log('UI initialized');
+        },
+        onVisibilityChange() {
+          // Auto-pause simulation when tab becomes hidden to avoid large time deltas on return
+          if (document.hidden) {
+            if (this.simulationRunning) {
+              this.wasSimulationRunningBeforeHide = true;
+              this.simulationRunning = false;
+              // Reset timestamp so resume does not accumulate background dt
+              this.lastTs = 0;
+              this.log('Simulation auto-paused (tab hidden)');
+            }
+          } else {
+            if (this.wasSimulationRunningBeforeHide) {
+              this.wasSimulationRunningBeforeHide = false;
+              this.lastTs = 0; // ensure fresh timing
+              this.simulationRunning = true;
+              this.log('Simulation auto-resumed (tab visible)');
+              requestAnimationFrame(this.stepSimulation.bind(this));
+            } else {
+              this.log('Tab visible');
+            }
+          }
         },
         resizeCanvas() {
           const rect = this.$refs.tray.getBoundingClientRect();
@@ -645,6 +702,9 @@
           this.computePathMetrics();
           this.simulationDistance = 0; this.segmentIndex = 0; this.lastDrawnSegmentIndex = 0;
           this.resetTrail();
+          if (this.pattern !== 11) { this.dslInputsSeq = []; this.dslOutputsSeq = []; this.lastDSLInputs = null; this.lastDSLOutputs = null; this.dslStepCounter = 0; this.dslStartTimestamp = null; }
+          else { this.updateDSLDetails(); }
+          if (this.pattern !== 11) { this.dslLocalsSeq = []; this.lastDSLLocals = null; }
           this.drawBackground();
           this.renderFrame();
         },
@@ -652,6 +712,35 @@
         resetTrail() { this.lastHeadX = null; this.lastHeadY = null; this.trailInitialized = false; this.ballPrevImage = null; this.ballPrevBox = null; },
         centerView() { this.renderFrame(); },
         toggleSimulation() { this.simulationRunning = !this.simulationRunning; if (this.simulationRunning) { this.lastTs = 0; requestAnimationFrame(this.stepSimulation.bind(this)); } },
+        stepOnce() {
+          if (this.simulationRunning) return; // disabled while running
+          if (this.points.length < 2 || this.segmentPolar.length === 0) return;
+            // Determine advance distance: move to end of current segment, or wrap if at end
+          const currentSegLen = this.segmentLengths[this.segmentIndex] || 0;
+          const segStartDist = this.segmentIndex === 0 ? 0 : this.segmentEndDistances[this.segmentIndex - 1];
+          const distWithin = this.simulationDistance - segStartDist;
+          const remaining = Math.max(0, currentSegLen - distWithin);
+          if (remaining > 0) {
+            this.simulationDistance += remaining;
+            // After moving exactly to end, shift to the next segment logically so next step acts forward
+            if (Math.abs((this.simulationDistance - segStartDist) - currentSegLen) < 1e-6 && this.segmentIndex < this.segmentLengths.length - 1) {
+              this.segmentIndex++;
+            }
+          } else {
+            // already at end of segment: move a tiny epsilon into next segment
+            if (this.segmentIndex < this.segmentLengths.length - 1) {
+              this.segmentIndex++;
+              this.simulationDistance = this.segmentEndDistances[this.segmentIndex - 1] + 0.0001;
+            } else {
+              // wrap to start
+              this.simulationDistance = 0; this.segmentIndex = 0; this.clearPath(); this.resetTrail();
+            }
+          }
+          this.updateSegmentIndex();
+          this.updateTrail();
+          this.updateDSLDetails();
+          this.renderFrame();
+        },
         stepSimulation(ts) {
           if (!this.simulationRunning) return;
           if (!this.lastTs) this.lastTs = ts; const dt = (ts - this.lastTs) / 1000; this.lastTs = ts;
@@ -663,6 +752,7 @@
           }
           this.updateSegmentIndex();
           this.updateTrail();
+          this.updateDSLDetails();
           this.renderFrame();
           requestAnimationFrame(this.stepSimulation.bind(this));
         },
@@ -713,23 +803,27 @@
           }
         },
         updateTrail() {
-          // Incremental stamping now handled inside renderFrame; keep index advance to prevent backlog if jumping
-          if (!this.showTrails) return;
+          // Always advance lastDrawnSegmentIndex (trails always on)
           this.lastDrawnSegmentIndex = this.segmentIndex;
         },
-        onShowTrailsChange() {
-          this.clearPath();
-          if (this.showTrails) {
-            // rebuild up to current segment
-            const prev = this.simulationDistance; this.simulationDistance = 0; this.segmentIndex = 0; this.lastDrawnSegmentIndex = 0;
-            // fast-forward drawing
-            while (this.segmentIndex < this.segmentEndDistances.length && this.segmentEndDistances[this.segmentIndex] < prev) {
-              this.segmentIndex++; this.updateTrail();
-            }
-            this.simulationDistance = prev; this.updateSegmentIndex(); this.updateTrail();
+        updateDSLDetails() {
+          if (this.pattern !== 11) return; // only for DSL pattern
+          if (!this.dslInputsSeq.length) return;
+          // Map simulationDistance to nearest point index. segmentIndex corresponds to progression into segment between point[segmentIndex] and point[segmentIndex+1].
+          // We'll display the starting point's data when at the segment start, and the next once we pass half the segment.
+          let idx = this.segmentIndex;
+          const segLen = this.segmentLengths[this.segmentIndex] || 0;
+          if (segLen > 0) {
+            const segStartDist = this.segmentIndex === 0 ? 0 : this.segmentEndDistances[this.segmentIndex - 1];
+            const distWithin = this.simulationDistance - segStartDist;
+            if (distWithin / segLen >= 0.5) idx = Math.min(idx + 1, this.dslInputsSeq.length - 1);
           }
-          this.renderFrame();
+          idx = Math.min(Math.max(0, idx), this.dslInputsSeq.length - 1);
+          this.lastDSLInputs = this.dslInputsSeq[idx];
+          this.lastDSLOutputs = this.dslOutputsSeq[idx];
+          this.lastDSLLocals = this.dslLocalsSeq[idx] || {};
         },
+        // onShowTrailsChange removed (trails always enabled)
         renderFrame() {
           const ctx = this.ctx;
           if (!this.trailInitialized) { this.drawBackground(); this.trailInitialized = true; }
@@ -764,7 +858,7 @@
               const r = seg.r0 + seg.dr * t; const theta = seg.theta0 + seg.dθ * t;
               const hx = cx + r * Math.cos(theta); const hy = cy + r * Math.sin(theta);
               // Incremental stamping directly on main canvas
-              if (this.showTrails) {
+              {
                 const spacing = this.ballRadiusPx * this.trenchStampSpacingFactor;
                 const stampSegment = (x0, y0, x1, y1) => {
                   const dx = x1 - x0, dy = y1 - y0; const dist = Math.hypot(dx, dy);
@@ -1064,13 +1158,16 @@
                 return { radial: Math.round(rad + rOffset), angular: Math.round(ang + aOffset) };
               };
             },
-            11: () => { // Custom DSL Script (units radius: cm, angle: degrees, rev continuous)
+            11: () => { // Custom Sandscript (units radius: cm, angle: degrees, rev continuous, steps & time)
               const stepsPerRev = STEPS_PER_A_AXIS_REV;
               const degToSteps = stepsPerRev / 360;
               const maxRadiusCm = this.scriptMaxRadius;
               const stepsPerCm = MAX_R_STEPS / maxRadiusCm;
               // Reset rev tracking on new factory creation
               this.revPrevAngleDeg = null; this.revUnwrappedAngleDeg = 0;
+              // Reset sequences
+              this.dslInputsSeq = []; this.dslOutputsSeq = []; this.dslLocalsSeq = [];
+              this.dslStepCounter = 0; this.dslStartTimestamp = performance.now();
               return (current, restart) => {
                 if (!this.compiledScript) return current;
                 const currentRadiusCm = current.radial / stepsPerCm;
@@ -1085,9 +1182,16 @@
                   this.revPrevAngleDeg = currentAngleDeg;
                 }
                 const rev = this.revUnwrappedAngleDeg / 360;
-                const vars = { radius: currentRadiusCm, angle: currentAngleDeg, start: restart ? 1 : 0, rev };
-                const values = evalDSLCompiled(this.compiledScript, vars);
-                this.lastDSLInputs = vars; this.lastDSLOutputs = values;
+                const timeMs = this.dslStartTimestamp != null ? (performance.now() - this.dslStartTimestamp) : 0;
+                const vars = { radius: currentRadiusCm, angle: currentAngleDeg, start: restart ? 1 : 0, rev, steps: this.dslStepCounter, time: timeMs };
+                const res = evalDSLCompiled(this.compiledScript, vars, true);
+                const values = res.outputs; const locals = res.locals;
+                this.lastDSLInputs = vars; this.lastDSLOutputs = values; this.lastDSLLocals = locals;
+                // Store copies for later simulation detail lookup
+                this.dslInputsSeq.push({ ...vars });
+                this.dslOutputsSeq.push({ ...values });
+                this.dslLocalsSeq.push({ ...locals });
+                this.dslStepCounter++;
                 function has(v) { return v != null && isFinite(v); }
                 let outRadiusCm = currentRadiusCm;
                 if (has(values.next_radius)) outRadiusCm = values.next_radius; else if (has(values.delta_radius)) outRadiusCm = currentRadiusCm + values.delta_radius;
@@ -1131,8 +1235,8 @@
 
     // -------- DSL Compiler & Evaluator (Unified) --------
     const DSG_OP = { CONST: 'CONST', LOAD: 'LOAD', ADD: 'ADD', SUB: 'SUB', MUL: 'MUL', DIV: 'DIV', NEG: 'NEG', SIN: 'SIN', COS: 'COS', ABS: 'ABS', CLAMP: 'CLAMP', SIGN: 'SIGN', END: 'END' };
-    // Added 'rev' synthetic input (angle/360) for revolution-based patterns.
-    const DSG_INPUTS = ['radius', 'angle', 'start', 'rev'];
+  // Added synthetic inputs: rev (angle/360 unwrapped), steps (evaluation counter), time (ms since script start)
+  const DSG_INPUTS = ['radius', 'angle', 'start', 'rev', 'steps', 'time'];
     const DSG_OUTPUTS = ['next_radius', 'next_angle', 'delta_radius', 'delta_angle'];
     const DSG_FUNCS = { sin: 1, cos: 1, abs: 1, clamp: 3, sign: 1 };
     const DSG_CONSTS = {};
@@ -1208,9 +1312,9 @@
       }
       if (!usedOrder.length && !errors.length) errors.push({ message: 'No assignments found', pos: 0 }); if (errors.length) return { ok: false, errors }; return { ok: true, script: { assignments, used: usedOrder, locals: [...localVars] } };
     }
-    function evalDSLCompiled(compiled, baseVars) {
+    function evalDSLCompiled(compiled, baseVars, collectLocals = false) {
       // Evaluate in source order so later outputs can reference earlier outputs.
-      const env = { ...baseVars }; const out = {};
+      const env = { ...baseVars }; const out = {}; const localsSnapshot = collectLocals ? {} : null;
       function run(bc) {
         const st = [];
         for (const ins of bc) {
@@ -1235,8 +1339,14 @@
       for (const name of compiled.used) {
         const val = run(compiled.assignments[name]);
         out[name] = val; env[name] = val; // expose to subsequent expressions
+        if (collectLocals) {
+          // capture only non-output, non-input, non-duplicated locals (those in compiled.locals)
+          for (const l of compiled.locals || []) {
+            if (env.hasOwnProperty(l)) localsSnapshot[l] = env[l];
+          }
+        }
       }
-      return out;
+      return collectLocals ? { outputs: out, locals: localsSnapshot } : out;
     }
     function formatBytecodeListing(bc) { return bc.map(ins => { if (ins.v != null) return ins.op + ' ' + ins.v; return ins.op; }).join('\n'); }
 
@@ -1261,6 +1371,8 @@
             if (startFlag || this.revPrevAngleDeg == null) {
               this.revPrevAngleDeg = currentAngleDeg;
               this.revUnwrappedAngleDeg = currentAngleDeg; // start from actual angle (prevents jump if not zero)
+              // Reset temporal counters for preview mode start
+              if (startFlag) { this.dslStepCounter = 0; this.dslStartTimestamp = performance.now(); }
             } else {
               let delta = currentAngleDeg - this.revPrevAngleDeg;
               if (delta > 180) delta -= 360; else if (delta < -180) delta += 360;
@@ -1268,9 +1380,12 @@
               this.revPrevAngleDeg = currentAngleDeg;
             }
             const rev = this.revUnwrappedAngleDeg / 360;
-            const vars = { radius: currentRadiusCm, angle: currentAngleDeg, start: startFlag ? 1 : 0, rev };
-            const values = evalDSLCompiled(this.compiledScript, vars);
-            this.lastDSLInputs = vars; this.lastDSLOutputs = values;
+            const timeMs = this.dslStartTimestamp != null ? (performance.now() - this.dslStartTimestamp) : 0;
+            const vars = { radius: currentRadiusCm, angle: currentAngleDeg, start: startFlag ? 1 : 0, rev, steps: this.dslStepCounter, time: timeMs };
+            const res = evalDSLCompiled(this.compiledScript, vars, true);
+            const values = res.outputs; const locals = res.locals;
+            this.lastDSLInputs = vars; this.lastDSLOutputs = values; this.lastDSLLocals = locals;
+            this.dslStepCounter++;
             function has(v) { return v != null && isFinite(v); }
             let outRadiusCm = currentRadiusCm;
             if (has(values.next_radius)) outRadiusCm = values.next_radius; else if (has(values.delta_radius)) outRadiusCm = currentRadiusCm + values.delta_radius;
