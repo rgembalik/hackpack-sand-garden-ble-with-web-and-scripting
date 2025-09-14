@@ -1,7 +1,7 @@
 # Sand Garden Pattern DSL Implementation Plan
 
-Status: Working Draft v0.3.1 (web RPN evaluator + continuous rev tracking – firmware compiler pending)
-Date: 2025-09-13
+Status: Working Draft v0.4.2 (modulus operator implemented in web simulation – firmware compiler pending)
+Date: 2025-09-14
 Owner: (You)
 
 ## Progress Snapshot
@@ -11,19 +11,21 @@ Owner: (You)
 | Requirements capture | ✅ Done | Clarified math‑expression DSL scope. |
 | Concept model options | ✅ Done | Chose assignment-only + math functions. |
 | Grammar & identifiers | ✅ Done | `next_/delta_` outputs fixed. |
-| Web DSL compiler (JS) | ✅ Done | Tokenizer + shunting yard → direct RPN stack eval (bytecode layer removed). |
+| Web DSL compiler (JS) | ✅ Done | Tokenizer + shunting yard → op-list (bytecode-like) evaluation (CONST/LOAD/ADD/...). |
 | Ordered output references | ✅ Done | Later outputs can reference earlier ones. |
 | Multi-line parsing robustness | ✅ Done | Explicit EOL tokens implemented. |
 | Degree-based trig | ✅ Done | `sin` / `cos` accept degrees (no rad variant now). |
 | Physical units abstraction | ✅ Done | Script sees `radius` (cm) & `angle` (deg); internal conversion to steps. |
 | Example scripts (base creative set) | ✅ Refreshed | Vibrant set incl. PingPongPetals, MirrorSpiral, EchoBloom, BounceWeave, StarPing, LaceHelix, RevCascade, StartBurst, PetalDrift, SelfRefWarp. |
 | Firmware scaffold (headers & stubs) | ✅ Done | `PatternScript.h/.cpp` placeholders. |
-| Real firmware compiler | ⏳ Pending | To implement: tokenizer, parser, RPN→compact op list evaluator (SIGN, CLAMP, etc). |
+| Real firmware compiler | ⏳ Pending | To implement: tokenizer, parser, RPN→compact op list evaluator (CONST/LOAD/ADD/... incl SIGN, CLAMP) matching web op list. |
 | BLE script upload protocol | ⏳ Pending | Plan drafted; not implemented. |
 | Documentation (user-facing usage) | ⏳ Pending | To add quick reference & examples in README / doc. |
 | Internal representation write-up | ⏳ Pending | Section to be expanded (todo). |
 | Progressive enhancement roadmap | ⏳ Pending | Draft list exists; needs refinement to match new unit model. |
 | `rev` synthetic input | ✅ Done | Continuous revolution counter (unwrappedAngleDeg / 360). |
+| `steps` synthetic input | ✅ Done | Evaluation counter (increments each DSL evaluation). |
+| `time` synthetic input | ✅ Done | Milliseconds since script start (web: performance.now baseline). |
 | Ephemeral local variables | ✅ Done | Any new identifier assigned becomes single-pass local. |
 | `sign()` function | ✅ Done | Enables arithmetic mirror / ping-pong patterns. |
 | Mirror arithmetic guidance | ✅ Done | Achieved via `dir = sign(cos(rev * 180))` pattern; no mode flag in DSL. |
@@ -36,19 +38,19 @@ Provide a **minimal, math-expression style DSL** to define motion patterns for t
 - Runs in the HTML client for preview & visualization.
 - Can be embedded as built-in patterns (flash constants) or uploaded via BLE (chunked if needed).
 
-## 2. Current Scope (v0 Requirements – Updated v0.3)
+## 2. Current Scope (v0 Requirements – Updated v0.4.2)
 | Feature | Included v0 | Notes |
 |---------|-------------|-------|
 | Absolute outputs | Yes | Provide next absolute polar target. |
 | Relative outputs | Optional (dr/da) | If provided, applied after input state. |
-| Inputs (read-only) | radius (cm), angle (deg), start, rev | `angle` is wrapped 0–360 for readability; `rev` is a continuous (unwrapped) revolution count maintained across evaluations: `rev = unwrappedAngleDeg / 360`. `start` is 1 first invocation. |
-| Time / counters | Not in v0 | (t, k) deferred until v1. Keeps firmware simpler initially. |
+| Inputs (read-only) | radius (cm), angle (deg), start, rev, steps, time | `angle` wrapped 0–360; `rev = unwrappedAngleDeg / 360` continuous; `steps` increments each evaluation; `time` ms since first evaluation (web uses high-res timer). |
+| Time / counters | Incorporated (`steps`, `time`) | Early inclusion to enable richer temporal patterns; firmware must add before parity release. |
 | Variables / params | Ephemeral locals | Any non-reserved identifier assigned becomes a one-pass local (not persisted). |
-| Math operators | + - * / unary -, parentheses | Minimal operator set. |
+| Math operators | + - * / % unary -, parentheses | `%` remainder (b==0 → 0). |
 | Trig | sin(), cos() (degree-based) | Degree arguments; radians removed for now. |
 | Other math | abs(), clamp(x,a,b), sign(x) | `sign` returns -1,0,1 enabling mirror / ping-pong. |
 | Power / sqrt | Optional (defer) | Add in v1 if needed. |
-| Modulus operator | Defer | Could add `%` in v1. |
+| Modulus operator | Yes | Remainder operator `%` (b==0 → 0). |
 | Conditionals / ternary | No | Defer. |
 | Comments | `# ...` end-of-line | For readability. |
 | Whitespace | Ignored | Standard. |
@@ -114,17 +116,17 @@ next_radius = radius + 0.5
 next_angle = angle + 15 * sin(next_radius * 12)
 ```
 
-## 5. Grammar (EBNF v0.3)
+## 5. Grammar (EBNF v0.4.2)
 ```
 program    := (statement | comment)*
 statement  := assignment
 assignment := ident '=' expr
 ident      := outputIdent | inputIdent | localIdent
 outputIdent:= 'next_radius' | 'next_angle' | 'delta_radius' | 'delta_angle'
-inputIdent := 'radius' | 'angle' | 'start' | 'rev'
+inputIdent := 'radius' | 'angle' | 'start' | 'rev' | 'steps' | 'time'
 localIdent := /[a-zA-Z_][a-zA-Z0-9_]*/  (but not colliding with reserved output/input)
 expr       := term (('+'|'-') term)*
-term       := factor (('*'|'/') factor)*
+term       := factor (('*'|'/'|'%') factor)*
 factor     := unary
 unary      := ('-' unary) | primary
 primary    := NUMBER | ident | func | '(' expr ')'
@@ -135,14 +137,14 @@ comment    := '#' <any chars until EOL>
 NUMBER     := [0-9]+ ('.' [0-9]+)?
 ```
 Notes:
-- Left-associative +,-,*,/.
+- Left-associative +,-,*,/,% ( * / % share precedence ).
 - No exponent operator in v0.
 - `clamp(x,a,b)` returns min(max(x,a),b).
 - User-defined identifiers now allowed as ephemeral locals (single-pass) if not reserved.
 - Reassignment overwrites earlier value within the same evaluation pass.
 - Forward reference to a local/output before assignment is a compile error.
 
-## 6. Token Types (v0.3)
+## 6. Token Types (v0.4)
 | Type | Example | Stored As |
 |------|---------|-----------|
 | NUMBER | 123 or 3.14 | float (32-bit) |
@@ -151,7 +153,7 @@ Notes:
 | FUNC | sin | enum |
 | COMMENT | #... | skipped |
 
-Read-only identifiers: `radius`, `angle`, `start`, `rev`.
+Read-only identifiers: `radius`, `angle`, `start`, `rev`, `steps`, `time`.
 Assignable identifiers:
 - Outputs: `next_radius`, `next_angle`, `delta_radius`, `delta_angle`
 - Locals: any other valid identifier (ephemeral; resets each eval call)
@@ -165,7 +167,7 @@ For each assignment:
 2. Convert to array of op objects `{op:OPCODE, v?:number|string}`
 3. Evaluate sequentially using a float stack
 
-### 7.2 Firmware Compact Op Encoding
+### 7.2 Firmware Compact Op Encoding (Updated for steps/time inputs & modulo v0.4.2)
 Define opcodes (1 byte) – proposed values:
 | Opcode | Hex | Stack Effect | Extra Bytes | Description |
 |--------|-----|--------------|-------------|-------------|
@@ -175,30 +177,35 @@ Define opcodes (1 byte) – proposed values:
 | OP_SUB   | 0x04 | pop2→push | 0 | a-b |
 | OP_MUL   | 0x05 | pop2→push | 0 | a*b |
 | OP_DIV   | 0x06 | pop2→push | 0 | a/b (if |b|<eps -> 0) |
-| OP_NEG   | 0x07 | pop→push | 0 | -a |
-| OP_SIN   | 0x08 | pop→push | 0 | sin(deg) |
-| OP_COS   | 0x09 | pop→push | 0 | cos(deg) |
-| OP_ABS   | 0x0A | pop→push | 0 | |a| |
-| OP_CLAMP | 0x0B | pop3→push | 0 | clamp(value,min,max) (stack order value,min,max) |
-| OP_SIGN  | 0x0C | pop→push | 0 | sign(a) (-1,0,1) |
+| OP_MOD   | 0x07 | pop2→push | 0 | fmod(a,b) (if |b|<eps -> 0) |
+| OP_NEG   | 0x08 | pop→push | 0 | -a |
+| OP_SIN   | 0x09 | pop→push | 0 | sin(deg) |
+| OP_COS   | 0x0A | pop→push | 0 | cos(deg) |
+| OP_ABS   | 0x0B | pop→push | 0 | |a| |
+| OP_CLAMP | 0x0C | pop3→push | 0 | clamp(value,min,max) (stack order value,min,max) |
+| OP_SIGN  | 0x0D | pop→push | 0 | sign(a) (-1,0,1) |
 | OP_END   | 0xFF | (flush) | 0 | End sentinel (optional if length stored) |
 
-Variable index mapping (u8):
+Variable index mapping (u8) (proposed updated ordering keeps legacy first four, appends new temporal inputs before outputs to simplify LOAD reuse while compiling outputs sequentially — alternative ordering acceptable if documented):
 | Index | Symbol |
 |-------|--------|
 | 0 | radius (cm) |
 | 1 | angle (deg wrapped 0–360) |
 | 2 | start (0/1) |
 | 3 | rev (continuous revolutions) |
-| 4 | next_radius (if already assigned) |
-| 5 | next_angle |
-| 6 | delta_radius |
-| 7 | delta_angle |
-| 8..(8+L-1) | locals in discovery order |
+| 4 | steps (evaluation counter) |
+| 5 | time (ms since script start) |
+| 6 | next_radius (if already assigned) |
+| 7 | next_angle |
+| 8 | delta_radius |
+| 9 | delta_angle |
+| 10..(10+L-1) | locals in discovery order |
+
+Rationale: placing `steps` & `time` before outputs ensures any script referencing them during the assignment of first output uses a consistent low index. If firmware has already reserved indices 4..7 for outputs (legacy design), an alternate mapping preserving that order SHOULD be implemented and this document updated accordingly. Parity tests must assert mapping.
 
 Max locals L ≤ 8 → final highest index ≤ 15 (fits in u8 easily). If more locals required → ERR_LOCAL_LIMIT.
 
-### 7.3 Firmware Data Structures (Proposed)
+### 7.3 Firmware Data Structures (Proposed – updated indices)
 ```c
 struct PSG_Op {
   uint8_t opcode; // OP_CONST, OP_LOAD, ...
@@ -220,6 +227,8 @@ struct PatternScript {
 
 struct PSG_Runtime {
   float radius, angle, rev;  // inputs each call (angle wrapped, rev continuous)
+  float stepsF;              // copy of evaluation counter as float (index 4)
+  float timeMs;              // elapsed ms since start (index 5)
   float stack[PSG_STACK_DEPTH];
   float locals[8];
   float outputs[4];
@@ -227,7 +236,7 @@ struct PSG_Runtime {
 };
 ```
 
-### 7.4 Continuous Revolution Tracking (Firmware)
+### 7.4 Continuous Revolution & Temporal Tracking (Firmware)
 Maintain `unwrappedAngleDeg` across evaluations (reset on restart):
 ```
 delta = angleDegWrapped - prevAngleDegWrapped;
@@ -237,6 +246,13 @@ rev = unwrappedAngleDeg / 360.0f;
 ```
 This matches web logic ensuring mirror / ping‑pong scripts behave identically.
 
+Additional temporal inputs:
+```
+steps: uint32_t evaluation counter (reset to 0 on restart BEFORE first eval; first call sees steps=0).
+time:  milliseconds since restart baseline (first call sees time≈0).
+```
+Both are exposed as floats to the VM (LOAD indices 4 and 5). Firmware implementation: maintain `uint32_t stepCounter; uint32_t startMillis;` and update prior to evaluation of each script step.
+
 ### 7.5 Evaluation Algorithm (Firmware)
 ```
 for each assignment in source order:
@@ -244,7 +260,7 @@ for each assignment in source order:
     switch(opcode):
       LOAD -> push(varTable[idx])
       CONST -> push(f)
-      ADD/SUB/MUL/DIV/NEG/SIN/COS/ABS/CLAMP/SIGN -> manipulate stack
+  ADD/SUB/MUL/DIV/MOD/NEG/SIN/COS/ABS/CLAMP/SIGN -> manipulate stack
   result = pop();
   store in target (output or local array)
 Resolve next_radius / next_angle precedence vs delta_*
@@ -260,13 +276,13 @@ Convert units to steps
 - Script length / tokens / ops exceed limits → ERR_TOO_LONG
 
 ### 7.7 Execution Edge Cases
-- Division by zero: return 0 (push 0) to avoid Inf.
+- Division by zero (DIV or MOD): return 0 (push 0) to avoid Inf/NaN.
 - `sin`/`cos` expect degrees; use fast degree→rad conversion: `rad = deg * (PI/180)`.
 - `clamp`: assume caller supplies sensible a≤b; if a>b treat min/max swapped.
 - `sign(±0)` returns 0; NaN input yields 0 (avoid propagating NaN to motion).
 
-### 7.8 Determinism
-No RNG in v0. All math uses single-precision; differences between web (double) and MCU (float) acceptable (<1 step) but can be reduced by forcing web to use `Math.fround` if needed for parity tests.
+### 7.8 Determinism & Temporal Parity
+No RNG in v0. Temporal variables introduce non-determinism relative to wall-clock; for parity tests, inject a deterministic `time` progression (e.g. fixed dt per eval). Web harness should allow overriding `time` injection for golden tests. All math uses single-precision on MCU; differences between web (double) and MCU (float) acceptable (<1 step) but can be reduced by applying `Math.fround` when generating expected comparisons.
 
 ### 7.9 Memory Footprint Targets
 Derive per-assignment op storage: If max 48 ops * (1 opcode + 4 bytes const worst case) ~ 240B per heavy assignment; with 4 outputs + locals typical < 1 KB.
@@ -274,19 +290,19 @@ Derive per-assignment op storage: If max 48 ops * (1 opcode + 4 bytes const wors
 ### 7.10 Optional Future Optimization
 Pack small consts via 16-bit index to shared constant pool; not needed in v0.
 
-## 8. Memory / Limits (Firmware) (revisit for locals/sign)
+## 8. Memory / Limits (Firmware) (revisit for locals/sign/temporal)
 | Item | Limit |
 |------|-------|
 | Max script length (chars) | 512 (fits small BLE upload, adjustable) |
 | Max tokens | 128 |
 | Max ops per assignment | 48 (tunable) |
-| Stack depth | 16 |
+| Stack depth | 16 (verify still sufficient with clamp(sign()) nesting; adjust if temporal scripts push limits) |
 | Number of assignments | Up to 4 outputs + locals (locals counted toward op & token limits) |
 | Max locals | 8 |
 
 If limits exceeded → error code (INVALID_TOO_LARGE).
 
-## 9. Error Codes (Minimal v0.3)
+## 9. Error Codes (Minimal v0.4)
 | Code | Meaning |
 |------|---------|
 | OK | Success |
@@ -400,7 +416,7 @@ next_radius = clamp(radius + (target - radius)*0.30, 0, 15)
 next_angle  = angle + 6
 ```
 
-## 16. RPN Example Encoding
+## 16. RPN Example Encoding (unchanged semantics)
 Expression: `angle + 90 + 20 * sin(radius * 0.01)`
 Tokens → RPN: `angle 90 + 20 radius 0.01 * sin * +`
 Firmware compact ops (illustrative):
@@ -424,13 +440,10 @@ ADD
 - Total < 6 KB (excluding trig functions from libm)
 - RAM: script buffer (512B) + token array (~512B) + bytecode (~256B) + stack (64B) ≈ < 1.5 KB transient.
 
-## 18. Future (v1+) Extensions (Not in v0)
+## 18. Future (v1+) Extensions (Not in v0 – updated for v0.4.2)
 | Feature | Notes |
 |---------|-------|
-| Time variable `t` | Provided from millis origin reset on start. |
-| Step counter `k` | Increments each eval. |
 | Additional functions | tan, sqrt, pow, noise, rand1. |
-| Modulus operator `%` | Implement with fmodf. |
 | Ternary | Adds jump ops; keep simple for now. |
 | User params | `param speed = 0.5` pre-eval once. |
 | Variables | Introduce `let x = ...` persistent between eval calls. |
@@ -449,12 +462,50 @@ ADD
 | Local variable limit | Tentatively 8 (review after MCU memory test). |
 | BLE framing ASCII vs Binary first? | ASCII for debugging. |
 
-## 20. Next Immediate Actions (v0.3.1)
-1. Implement firmware compiler & op encoder exactly per Section 7.2/7.3 (include continuous rev state in runtime).
-2. Add automated parity tests (host) comparing MCU compiled ops vs web evaluation for scripts A–H.
-3. Write README Quick Reference (inputs, outputs, functions, continuous `rev`, mirror patterns, local vars, limits).
-4. Implement BLE upload path and return numeric error codes; map to short text.
-5. Add optional build flag for deterministic float (`-ffast-math` OFF) if parity drift > 1 step.
-6. Document clamp/sign NaN handling in README; ensure firmware zeroes on NaN.
+## 20. Next Immediate Actions (v0.4.2)
+1. Implement firmware compiler & op encoder with updated opcode map (include OP_MOD 0x07 and shifted NEG..SIGN) and new input indices for `steps` & `time`.
+2. Add runtime fields: `uint32_t stepCounter; uint32_t startMillis;` convert to float for VM LOAD; increment stepCounter before each eval.
+3. Provide continuous time injection; consider `millis()` first, optionally abstract to high-res if drift impacts patterns.
+4. Build parity harness: run scripts A–H plus new temporal/modulo scripts (I,J – to author) in both web (forced deterministic time) and firmware; compare outputs for N steps.
+5. Add README quick reference (inputs, outputs, operators, functions, temporal vars, zero-div behavior, local variable rules).
+6. Implement BLE upload path (BEGIN/DATA/END framing) returning numeric error codes; map to short text.
+7. Add deterministic test mode build flag to freeze `time` progression (e.g. +16ms per eval) for automated tests.
+8. Bench memory & stack usage with worst-case expression (deep clamp/sign nesting) adjust `PSG_STACK_DEPTH` if needed (>16?).
+9. Document final opcode table and variable index mapping in header (`PatternScript.h`) with version tag `PSG_DSL_VERSION 0x0402`.
+- Variable index ordering differs if legacy firmware reserved indices 4..7 for outputs. Decide final ordering early to avoid script meaning drift.
 
-**End of Plan v0.3.1 Draft**
+Convergence plan:
+1. Freeze variable index mapping (documented in Section 7.2) and implement identical ordering in firmware.
+2. Provide a compile-time constant to optionally disable temporal inputs (maps LOAD indices 4 & 5 to 0) for resource-constrained builds.
+3. Add a deterministic test harness path where `time` advances by fixed delta (e.g. 16.666 ms) for parity testing.
+
+## 21. Next Immediate Actions (v0.4.1)
+1. Implement firmware compiler & op encoder exactly per Section 7.2/7.3 including indices for `steps` & `time` and OP_MOD.
+2. Add automated parity tests (host) comparing MCU compiled ops vs web evaluation for scripts A–H plus new temporal & modulo example (see below).
+3. Provide deterministic test mode feeding synthetic `time` increments instead of real clock.
+4. Decide and finalize variable index ordering (update doc if diverging from proposed) before first firmware release.
+5. Write README Quick Reference (inputs, outputs, functions, continuous `rev`, `steps`, `time`, mirror patterns, locals, limits).
+6. Implement BLE upload path and return numeric error codes; map to short text.
+7. Add optional build flag disabling temporal inputs (maps `steps`,`time` to 0) for legacy parity.
+8. Add build flag forcing IEEE compliance (disable `-ffast-math`) for parity test builds; optionally allow faster math in release.
+9. Document clamp/sign/mod NaN handling in README; ensure firmware zeroes on NaN or b==0 for div/mod.
+10. Add temporal pattern & modulo example script (see below) to test set.
+11. Implement OP_MOD in firmware using fmodf with epsilon guard.
+
+Temporal example (new Test Script I):
+```
+# Radius breathing with time (period ~4s) & step-based angular increment
+phase = sin(time * 0.090)           # time in ms -> 0.090 ~= 2*pi / (1000*11.11) adjust as desired
+next_radius = clamp(7.5 + phase * 7.5, 0, 15)
+next_angle = angle + 6 + 2 * sin(steps * 3)
+```
+
+Modulo example (Test Script J):
+```
+# Petal indexing using modulo every 7 steps
+idx = steps % 7
+next_radius = clamp(3 + idx * 0.8, 0, 15)
+next_angle = angle + 30
+```
+
+**End of Plan v0.4.2 Draft**

@@ -283,8 +283,8 @@
                 class='font-mono text-sg-accent'>next_angle</code>, <code
                 class='font-mono text-sg-accent'>delta_radius</code>, <code
                 class='font-mono text-sg-accent'>delta_angle</code>. Inputs: <code class='font-mono'>radius</code>,
-              <code class='font-mono'>angle</code>, <code class='font-mono'>steps</code>, <code class='font-mono'>time</code>, <code class='font-mono'>start</code>, <code class='font-mono'>rev</code><span class="text-gray-500">(legacy)</span>. Functions: <code class='font-mono'>sin cos abs clamp sign</code>. Trig
-              uses degrees. <span class="text-sg-accent/80">steps</span> = evaluation count since start (0-based), <span class="text-sg-accent/80">time</span> = ms since script start (approx in browser).</p>
+              <code class='font-mono'>angle</code>, <code class='font-mono'>steps</code>, <code class='font-mono'>time</code>, <code class='font-mono'>start</code>, <code class='font-mono'>rev</code><span class="text-gray-500">(legacy)</span>. Operators: <code class='font-mono'>+ - * / %</code>. Functions: <code class='font-mono'>sin cos abs clamp sign</code>. Trig
+              uses degrees. <span class="text-sg-accent/80">steps</span> = evaluation count since start (0-based), <span class="text-sg-accent/80">time</span> = ms since script start (approx in browser). <span class='text-sg-accent/80'>a % b</span> returns remainder (b==0 → 0).</p>
             <div class="flex flex-wrap gap-2 text-[11px]">
               <template x-for="ex in exampleScripts" :key="ex.name">
                 <button @click="loadExample(ex)"
@@ -429,7 +429,12 @@
           { id: 11, name: 'Sandscript', short: 'script', description: 'Your custom Sandscript.', pointsTarget: 2000 }
         ],
   // Sandscript state (internal variables still prefixed dsl for now)
-  scriptSource: `# PingPong Petals (steps-based fine-step)\n# Direction flips every ~400 steps using cosine square wave via sign(cos())\ndir = sign(cos(steps*0.45))\nwave = sin(angle*5)*0.45 + sin(angle*9)*0.20\nbase = clamp(radius + 0.10 + wave*0.30, 0, 15)\nnext_radius = base\nnext_angle = angle + (5.5 + sin(angle*3)*1.3) * dir`,
+  scriptSource: `# simple back and forth with the ball, no easing at the edge
+
+dir = -sign(steps % 30 - 15)
+
+delta_angle = 1
+delta_radius = 1 * dir`,
         compileErrors: [],
         compiledScript: null,
         // Continuous revolution tracking for DSL (rev variable)
@@ -441,7 +446,20 @@
         autoRecompile: true,
         autoSimulate: true,
         exampleScripts: [
-          { name: 'PingPongPetals', code: `# Fine-step dir flips every ~400 steps (mirror)\n# 360/0.45 ≈ 800 step period -> flips half-period ~400\ndir = sign(cos(steps*0.45))\nwave = sin(angle*5)*0.45 + sin(angle*9)*0.20\nbase = clamp(radius + 0.10 + wave*0.30, 0, 15)\nnext_radius = base\nnext_angle = angle + (5.5 + sin(angle*3)*1.3) * dir` },
+          { final: true, name: 'PingPongSharpPetals', code: `# simple back and forth with the ball,
+# no easing at the edge
+
+dir = -sign(steps % 30 - 15)
+
+delta_angle = 1
+delta_radius = 1 * dir` },
+          { final: true, name: 'PingPongSoftPetals', code: `# simple back and forth with the ball 
+# with sinusoidal easing
+
+dir = sin(steps * 180 / 23)
+
+delta_angle = 1
+delta_radius = 1 * dir` },
           { final: true, name: 'MirrorSpiral', code: `# Simple outward/inward spiral mimic (no % operator)
 # Triangle wave using cosine (period = 2 revs)
 # tri = 0.5 * (1 - cos(rev*180)) gives 0->1 (rev 0-1), 1->0 (rev 1-2)
@@ -1234,7 +1252,7 @@ next_angle = angle + (6 + sin(angle*2.5)*1.8) * dir` },
     }
 
     // -------- DSL Compiler & Evaluator (Unified) --------
-    const DSG_OP = { CONST: 'CONST', LOAD: 'LOAD', ADD: 'ADD', SUB: 'SUB', MUL: 'MUL', DIV: 'DIV', NEG: 'NEG', SIN: 'SIN', COS: 'COS', ABS: 'ABS', CLAMP: 'CLAMP', SIGN: 'SIGN', END: 'END' };
+  const DSG_OP = { CONST: 'CONST', LOAD: 'LOAD', ADD: 'ADD', SUB: 'SUB', MUL: 'MUL', DIV: 'DIV', MOD: 'MOD', NEG: 'NEG', SIN: 'SIN', COS: 'COS', ABS: 'ABS', CLAMP: 'CLAMP', SIGN: 'SIGN', END: 'END' };
   // Added synthetic inputs: rev (angle/360 unwrapped), steps (evaluation counter), time (ms since script start)
   const DSG_INPUTS = ['radius', 'angle', 'start', 'rev', 'steps', 'time'];
     const DSG_OUTPUTS = ['next_radius', 'next_angle', 'delta_radius', 'delta_angle'];
@@ -1259,7 +1277,7 @@ next_angle = angle + (6 + sin(angle*2.5)*1.8) * dir` },
             let j = i + 1; while (j < line.length && /[a-zA-Z0-9_]/.test(line[j])) j++;
             push('IDENT', line.slice(i, j), pos); i = j; hadCode = true; continue;
           }
-          if ('+-*/=(),'.includes(c)) { push(c, c, pos); i++; hadCode = true; continue; }
+          if ('+-*/%=(),'.includes(c)) { push(c, c, pos); i++; hadCode = true; continue; }
           errors.push({ message: 'Unexpected char ' + c, pos }); i++;
         }
         if (hadCode) push('EOL', 'EOL', global + line.length - 1);
@@ -1272,7 +1290,7 @@ next_angle = angle + (6 + sin(angle*2.5)*1.8) * dir` },
       let idx = 0; const assignments = {}; const usedOrder = []; const definedOutputs = new Set(); const localVars = new Set();
       const peek = () => tokens[idx]; const consume = t => { const tk = peek(); if (!tk || tk.type !== t) { errors.push({ message: 'Expected ' + t, pos: tk ? tk.pos : -1 }); return null; } idx++; return tk; };
       function parseExpression() {
-        const output = []; const stack = []; let expectValue = true; const prec = o => o === '+' || o === '-' ? 1 : (o === '*' || o === '/' ? 2 : 0); const isOp = t => ['+', '-', '*', '/'].includes(t);
+        const output = []; const stack = []; let expectValue = true; const prec = o => (o === '+' || o === '-') ? 1 : ((o === '*' || o === '/' || o === '%') ? 2 : 0); const isOp = t => ['+', '-', '*', '/', '%'].includes(t);
         while (true) {
           const tk = peek(); if (!tk) break; if (tk.type === 'EOL') { break; }
           if (tk.type === 'NUMBER') { output.push(tk); idx++; expectValue = false; continue; }
@@ -1288,7 +1306,7 @@ next_angle = angle + (6 + sin(angle*2.5)*1.8) * dir` },
         while (peek() && peek().type === 'EOL') idx++;
         return output;
       }
-      function rpnToBytecode(rpn, definedLocals) { const bc = []; for (const tk of rpn) { if (!tk) continue; if (tk.type === 'NUMBER') { bc.push({ op: DSG_OP.CONST, v: tk.value }); continue; } if (tk.type === 'IDENT') { const nm = tk.value; if (DSG_CONSTS[nm] != null) { bc.push({ op: DSG_OP.CONST, v: DSG_CONSTS[nm] }); continue; } if (DSG_FUNCS[nm] != null) { switch (nm) { case 'sin': bc.push({ op: DSG_OP.SIN }); break; case 'cos': bc.push({ op: DSG_OP.COS }); break; case 'abs': bc.push({ op: DSG_OP.ABS }); break; case 'clamp': bc.push({ op: DSG_OP.CLAMP }); break; case 'sign': bc.push({ op: DSG_OP.SIGN }); break; } continue; } if (DSG_INPUTS.includes(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (DSG_OUTPUTS.includes(nm)) { if (!definedOutputs.has(nm)) { errors.push({ message: 'Output ' + nm + ' used before it is assigned earlier in script', pos: tk.pos }); } bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (definedLocals.has(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } errors.push({ message: 'Unknown identifier ' + nm, pos: tk.pos }); continue; } if (['+', '-', '*', '/'].includes(tk.type)) { bc.push({ op: { '+': DSG_OP.ADD, '-': DSG_OP.SUB, '*': DSG_OP.MUL, '/': DSG_OP.DIV }[tk.type] }); continue; } if (tk.type === 'NEG') { bc.push({ op: DSG_OP.NEG }); continue; } } bc.push({ op: DSG_OP.END }); return bc; }
+  function rpnToBytecode(rpn, definedLocals) { const bc = []; for (const tk of rpn) { if (!tk) continue; if (tk.type === 'NUMBER') { bc.push({ op: DSG_OP.CONST, v: tk.value }); continue; } if (tk.type === 'IDENT') { const nm = tk.value; if (DSG_CONSTS[nm] != null) { bc.push({ op: DSG_OP.CONST, v: DSG_CONSTS[nm] }); continue; } if (DSG_FUNCS[nm] != null) { switch (nm) { case 'sin': bc.push({ op: DSG_OP.SIN }); break; case 'cos': bc.push({ op: DSG_OP.COS }); break; case 'abs': bc.push({ op: DSG_OP.ABS }); break; case 'clamp': bc.push({ op: DSG_OP.CLAMP }); break; case 'sign': bc.push({ op: DSG_OP.SIGN }); break; } continue; } if (DSG_INPUTS.includes(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (DSG_OUTPUTS.includes(nm)) { if (!definedOutputs.has(nm)) { errors.push({ message: 'Output ' + nm + ' used before it is assigned earlier in script', pos: tk.pos }); } bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (definedLocals.has(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } errors.push({ message: 'Unknown identifier ' + nm, pos: tk.pos }); continue; } if (['+', '-', '*', '/', '%'].includes(tk.type)) { bc.push({ op: { '+': DSG_OP.ADD, '-': DSG_OP.SUB, '*': DSG_OP.MUL, '/': DSG_OP.DIV, '%': DSG_OP.MOD }[tk.type] }); continue; } if (tk.type === 'NEG') { bc.push({ op: DSG_OP.NEG }); continue; } } bc.push({ op: DSG_OP.END }); return bc; }
       while (idx < tokens.length && !errors.length) {
         // skip stray EOLs
         while (peek() && peek().type === 'EOL') idx++;
@@ -1325,6 +1343,7 @@ next_angle = angle + (6 + sin(angle*2.5)*1.8) * dir` },
             case DSG_OP.SUB: { const b = st.pop(), a = st.pop(); st.push(a - b); break; }
             case DSG_OP.MUL: { const b = st.pop(), a = st.pop(); st.push(a * b); break; }
             case DSG_OP.DIV: { const b = st.pop(), a = st.pop(); st.push(b === 0 ? 0 : a / b); break; }
+            case DSG_OP.MOD: { const b = st.pop(), a = st.pop(); st.push(b === 0 ? 0 : a % b); break; }
             case DSG_OP.NEG: { const a = st.pop(); st.push(-a); break; }
             case DSG_OP.SIN: { const a = st.pop(); st.push(Math.sin(a * Math.PI / 180)); break; } // degree-based
             case DSG_OP.COS: { const a = st.pop(); st.push(Math.cos(a * Math.PI / 180)); break; } // degree-based
