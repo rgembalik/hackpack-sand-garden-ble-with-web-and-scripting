@@ -36,6 +36,7 @@ INCLUDED LIBRARIES
 #include <OneButtonTiny.h>   //Button management and debouncing
 #include <NimBLEDevice.h>    // Ensure NimBLE core available for BLEConfigServer
 #include "BLEConfigServer.h" // BLE configuration server (modular config service)
+#include "Positions.h"       // shared Positions struct for external modules
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /*
@@ -68,12 +69,7 @@ Useful values and limits for defining how the sand garden will behave. In most c
 #define MAX_SPEED_R_MOTOR 550.0 // Maximum speed in steps per second for radius motor. Faster than this is unreliable.
 #define MAX_SPEED_A_MOTOR 550.0 // Maximum speed in steps per second for angle motor.
 
-// The following is used to reduce angular speed linearly with the current position on the radial axis.
-// This helps the ball move at a more consistent speed through the sand regardless of how far out it is on the radial axis.
-// This is just a linear function that can be fine tuned by changing the amount removed from the max speed (currently 50.0).
-// Essentially what this does is drops the speed of the angular axis to 50.0 steps per second at the very outer edge of
-// the actual length of the radial axis. This point is unreachable in typical use because of the soft limits.
-#define ANGULAR_SPEED_SCALAR (MAX_SPEED_A_MOTOR - 150.0) / (MAX_R_STEPS)
+// Angular speed reduction now computed dynamically inside moveToPosition() using current max speed values.
 
 // Pin definitions follow.
 // The #ifdef / #endif blocks are used to check to see if either REVERSE_R_MOTOR or REVERSE_A_MOTOR
@@ -117,11 +113,7 @@ Useful values and limits for defining how the sand garden will behave. In most c
 #define LED_FADE_PERIOD 1000    // Amount of time in milliseconds it takes for LEDs to fade on and off.
 
 // Struct used for storing positions of the axes, as well as storing the values of the joystick.
-struct Positions
-{
-  int radial; // the units for these values are motor steps
-  int angular;
-};
+// Positions struct definition moved to Positions.h for sharing with PatternScript and future modules.
 
 // Joystick manual mode threshold retained; removed unused runtime calibration scaffolding.
 static const int JOYSTICK_MANUAL_MOVE_THRESHOLD = 12; // require this magnitude before commanding motion steps
@@ -243,6 +235,7 @@ public:
     float m = constrain(newValue, 0.1f, 3.0f);
     stepperAngle.setMaxSpeed(MAX_SPEED_A_MOTOR * m);
     stepperRadius.setMaxSpeed(MAX_SPEED_R_MOTOR * m);
+    
   }
   void onCurrentPatternChanged(int newPattern) override
   {
@@ -920,34 +913,50 @@ int calcRadialChange(int angularMoveInSteps, int radialMoveInSteps)
 void moveToPosition(long angularSteps, long radialSteps)
 {
   long absStepsA = abs(angularSteps), absStepsR = abs(radialSteps); // absolute values used to compare total distance each motor travels
-  float maxSpeedA = MAX_SPEED_A_MOTOR, maxSpeedR = MAX_SPEED_R_MOTOR;
-  float moveTime = 0.0;
 
-  // Reduce the maximum angular speed based on the radial position of the ball.
-  // If you don't do this, the ball moves too fast when it's on the outer edge of the sand tray.
-  float speedReducer = ANGULAR_SPEED_SCALAR * currentPositions.radial;
-  maxSpeedA = MAX_SPEED_A_MOTOR - speedReducer;
+  // Fetch the CURRENT configured max speeds (already include BLE multiplier effects)
+  const float configuredMaxA = stepperAngle.maxSpeed();
+  const float configuredMaxR = stepperRadius.maxSpeed();
 
-  float speedA = maxSpeedA, speedR = maxSpeedR; // one of the motors will eventually be moved at max speed, the other will be slowed down.
+  // Preserve original floor ratio: original code reduced 550 -> 150 at outer radius.
+  // Floor fraction = 150 / MAX_SPEED_A_MOTOR.
+  const float floorFraction = 150.0f / (float)MAX_SPEED_A_MOTOR; // ~0.2727
+  const float floorA = configuredMaxA * floorFraction;           // scaled floor so multiplier affects both ends
 
-  // determine which motor has a shorter move, and slow it down proportional to the ratio of the distance each motor travels.
+  // Linear slope so that at radial = 0 => configuredMaxA, at radial = MAX_R_STEPS => floorA
+  const float slopeA = (configuredMaxA - floorA) / (float)MAX_R_STEPS; // steps/sec per radial step
+  float maxSpeedA = configuredMaxA - slopeA * currentPositions.radial;
+  if (maxSpeedA < floorA)
+    maxSpeedA = floorA; // clamp (safety)
 
+  float maxSpeedR = configuredMaxR; // radial not currently derated by position
+
+  float speedA = maxSpeedA;
+  float speedR = maxSpeedR;
+  float moveTime = 0.0f;
+
+  // Determine which axis has the longer move and proportionally scale the other so both finish together.
   if ((absStepsA > absStepsR) && (absStepsA != 0))
-  {                                          // if Angle motor is moving farther. the second conditional avoids a divide by zero error.
-    moveTime = (float)absStepsA / maxSpeedA; // how long it will take to move A axis to target at top speed.
-    speedR = (float)absStepsR / moveTime;    // recalculate speed of R motor to take same time as A motor move. Slows down R motor.
+  {
+    moveTime = (float)absStepsA / maxSpeedA;      // seconds at A max
+    speedR = (absStepsR == 0) ? 0.0f : (float)absStepsR / moveTime; // sync R
+    if (speedR > maxSpeedR)
+      speedR = maxSpeedR; // never exceed configured cap
   }
   else if ((absStepsR > absStepsA) && (absStepsR != 0))
   {
-    moveTime = (float)absStepsR / maxSpeedR; // Radial is moving farther. Time in seconds to make that move at max speed.
-    speedA = (float)absStepsA / moveTime;    // Slow down A to complete its move in same amount of time as R.
+    moveTime = (float)absStepsR / maxSpeedR;      // seconds at R max
+    speedA = (absStepsA == 0) ? 0.0f : (float)absStepsA / moveTime; // sync A
+    if (speedA > maxSpeedA)
+      speedA = maxSpeedA; // enforce derated angular cap
   }
+  // If equal distances, both remain at their (possibly derated) max speeds.
 
-  // set up the moves for each motor
-  stepperAngle.move(angularSteps); // set up distance the motor will travel in steps. This value can be positive or negative: the sign determines the direction the motor spins.
-  stepperAngle.setSpeed(speedA);   // call this to ensure that the motor moves at constant speed (no accelerations).
+  // Configure the moves (relative distances). Using runSpeedToPosition so set constant speeds directly.
+  stepperAngle.move(angularSteps);
+  stepperAngle.setSpeed((angularSteps < 0) ? -speedA : speedA); // respect direction explicitly for clarity
   stepperRadius.move(radialSteps);
-  stepperRadius.setSpeed(speedR);
+  stepperRadius.setSpeed((radialSteps < 0) ? -speedR : speedR);
 
   // execute steps at the correct speed as long as a motor still needs to travel, and as long as the run/stop
   // button has not been pressed. If the runPattern flag is false, this loop will immediately exit,
