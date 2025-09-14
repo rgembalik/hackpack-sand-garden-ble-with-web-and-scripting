@@ -484,11 +484,11 @@ next_angle = angle + 15.0` },
           { name: 'BounceWeave', code: `# Fine-step radial bounce\nweave = abs(sin(angle*3))*0.55 + abs(sin(angle*11))*0.20\nnext_radius = clamp(6 + weave*6.0, 0, 15)\nnext_angle = angle + 5.8 + sin(angle*5)*1.3` },
           { final: true,name: 'StarPing', code: `# Fine-step star points with directional and radial flips via steps
 # Use lower frequency for broader lobes
-osciradius = sin(steps/2) * 4
+radius_oscilation = sin(steps/8) * 4
 dir = sign(cos(steps*0.30))
 arm = abs(sin(angle*2.5))*0.75 + abs(sin(angle*5))*0.28
-next_radius = clamp(4 + arm*7.2, 0, 15) + osciradius 
-next_angle = angle + (6 + sin(angle*2.5)*1.8) * dir` },
+next_radius = clamp(4 + arm*7.2, 0, 15) + radius_oscilation 
+next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
           { name: 'LaceHelix', code: `# Fine-step lace helix\nmod = sin(angle*4)*0.24 + sin(angle*9)*0.16 + sin(angle*13)*0.11\nnext_radius = clamp(radius + 0.06 + mod, 0, 15)\nnext_angle = angle + 5 + sin(angle*5)*1.5` },
           { name: 'RevCascade', code: `# Fine-step growth bursts (steps-based)\nphase = sign(cos(steps*0.40))\nnext_radius = clamp(radius + 0.08 + phase*0.12 + sin(angle*6)*0.18, 0, 15)\nnext_angle = angle + 6 + sin(angle*4)*1.2` },
           { name: 'StartBurst', code: `# Fine-step start flare then weave\nflare = start*4.5\nnext_radius = clamp(radius + flare + sin(angle*5)*0.25, 0, 15)\nnext_angle = angle + 6 + sin(angle*3)*1.4` },
