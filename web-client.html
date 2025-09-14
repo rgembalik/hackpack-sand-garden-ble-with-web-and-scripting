@@ -157,7 +157,10 @@
             </div>
             <div>
               <dt class="text-gray-400">Pattern</dt>
-              <dd class="font-mono" x-text="pattern + ' - ' + patternMeta[pattern-1].name"></dd>
+              <dd class="font-mono">
+                <span x-text="pattern + ' - ' + patternMeta[pattern-1].name"></span>
+                <span x-show="patternMeta[pattern-1].type==='builtin'" class="ml-1 align-middle text-[10px] leading-none px-1.5 py-0.5 rounded bg-gray-700/60 text-amber-300 uppercase tracking-wide">preview</span>
+              </dd>
             </div>
             <div>
               <dt class="text-gray-400">Running</dt>
@@ -222,9 +225,12 @@
                 <button @click="selectPattern(p.id)"
                   :class="pattern === p.id ? 'ring-2 ring-sg-accent/70 bg-sg-accent/10' : 'hover:bg-gray-700/50'"
                   class="w-full text-left px-3 py-2 rounded-lg bg-gray-800/40 border border-gray-700/60 transition duration-150 focus:outline-none focus:ring-2 focus:ring-sg-accent/50">
-                  <div class="flex justify-between items-center">
-                    <span class="font-medium" x-text="p.id + '. ' + p.name"></span>
-                    <span class="text-xs text-gray-400" x-text="p.short"></span>
+                  <div class="flex justify-between items-center gap-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="font-medium truncate" x-text="p.id + '. ' + p.name"></span>
+                      <span x-show="p.type==='builtin'" class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700/70 text-amber-300 uppercase tracking-wide">Preview</span>
+                    </div>
+                    <span class="text-xs text-gray-400 shrink-0" x-text="p.short"></span>
                   </div>
                 </button>
               </li>
@@ -235,6 +241,10 @@
         <div class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow">
           <h2 class="text-lg font-semibold mb-3">Pattern Details</h2>
           <div class="text-sm text-gray-300" x-text="patternMeta[pattern-1].description"></div>
+          <div class="mt-2 flex items-start gap-2" x-show="patternMeta[pattern-1].type==='builtin'">
+            <span class="text-[11px] px-2 py-1 rounded bg-gray-700/60 text-amber-300 uppercase tracking-wide">Preview Only</span>
+            <span class="text-xs text-gray-500 leading-relaxed">Built-in firmware-style pattern simulation for visualization; not sent live.</span>
+          </div>
         </div>
       </section>
 
@@ -416,17 +426,17 @@
         joy: { a: 0, r: 0, mag: 0 }, lastState: { pat: null, auto: null, run: null, brt: null }, heartbeatCount: 0,
         patternMeta: [
           // Added pointsTarget to guide simulation length (approx, can tweak)
-          { id: 1, name: 'Simple Spiral', short: 'spiral', description: 'Outward then inward spiral path (firmware logic).', pointsTarget: 4500 },
-          { id: 2, name: 'Cardioids', short: 'cardioid', description: 'Petaled cardioid style looping figure.', pointsTarget: 1200 },
-          { id: 3, name: 'Wavy Spiral', short: 'wavy', description: 'Spiral with sinusoidal radial modulation.', pointsTarget: 4600 },
-          { id: 4, name: 'Rotating Squares', short: 'squares', description: 'Sequence of rotating square outlines.', pointsTarget: 2300 },
-          { id: 5, name: 'Pentagon Spiral', short: 'penta sp', description: 'Pentagon-based growing & shrinking spiral.', pointsTarget: 3200 },
-          { id: 6, name: 'Hexagon Vortex', short: 'hexa', description: 'Rotating, pulsing hexagon vortex.', pointsTarget: 3000 },
-          { id: 7, name: 'Pentagon Rainbow', short: 'penta rb', description: 'Off-center rotating/translated pentagon.', pointsTarget: 2500 },
-          { id: 8, name: 'Random Walk 1', short: 'rw arc', description: 'Random absolute targets (shortest angular path).', pointsTarget: 1800 },
-          { id: 9, name: 'Random Walk 2', short: 'rw line', description: 'Random straight-line interpolation between points.', pointsTarget: 1800 },
-          { id: 10, name: 'Accidental Butterfly', short: 'butterfly', description: 'Sinusoidally modulated spiral (butterfly).', pointsTarget: 4600 },
-          { id: 11, name: 'Sandscript', short: 'script', description: 'Your custom Sandscript.', pointsTarget: 2000 }
+          { id: 1, type: 'builtin', name: 'Simple Spiral', short: 'spiral', description: 'Outward then inward spiral path (firmware logic).', pointsTarget: 4500 },
+          { id: 2, type: 'builtin', name: 'Cardioids', short: 'cardioid', description: 'Petaled cardioid style looping figure.', pointsTarget: 1200 },
+          { id: 3, type: 'builtin', name: 'Wavy Spiral', short: 'wavy', description: 'Spiral with sinusoidal radial modulation.', pointsTarget: 4600 },
+          { id: 4, type: 'builtin', name: 'Rotating Squares', short: 'squares', description: 'Sequence of rotating square outlines.', pointsTarget: 2300 },
+          { id: 5, type: 'builtin', name: 'Pentagon Spiral', short: 'penta sp', description: 'Pentagon-based growing & shrinking spiral.', pointsTarget: 3200 },
+          { id: 6, type: 'builtin', name: 'Hexagon Vortex', short: 'hexa', description: 'Rotating, pulsing hexagon vortex.', pointsTarget: 3000 },
+          { id: 7, type: 'builtin', name: 'Pentagon Rainbow', short: 'penta rb', description: 'Off-center rotating/translated pentagon.', pointsTarget: 2500 },
+          { id: 8, type: 'builtin', name: 'Random Walk 1', short: 'rw arc', description: 'Random absolute targets (shortest angular path).', pointsTarget: 1800 },
+          { id: 9, type: 'builtin', name: 'Random Walk 2', short: 'rw line', description: 'Random straight-line interpolation between points.', pointsTarget: 1800 },
+          { id: 10, type: 'builtin', name: 'Accidental Butterfly', short: 'butterfly', description: 'Sinusoidally modulated spiral (butterfly).', pointsTarget: 4600 },
+          { id: 11, type: 'sandscript', name: 'Sandscript', short: 'script', description: 'Your custom Sandscript.', pointsTarget: 2000 }
         ],
   // Sandscript state (internal variables still prefixed dsl for now)
   scriptSource: `# simple back and forth with the ball, no easing at the edge
