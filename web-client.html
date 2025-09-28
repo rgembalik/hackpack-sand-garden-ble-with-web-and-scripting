@@ -214,8 +214,6 @@
             <!-- Show Trails option removed (always on) -->
           </div>
           <div class="flex gap-3">
-            <button type="button" @click="centerView()"
-              class="px-3 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-sm font-medium">Center View</button>
             <button type="button" @click="clearPattern()"
               class="px-3 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-sm font-medium">Clear Pattern</button>
           </div>
@@ -268,6 +266,39 @@
               Only</span>
             <span class="text-xs text-gray-500 leading-relaxed">Built-in firmware-style pattern simulation for
               visualization; not sent live.</span>
+          </div>
+        </div>
+
+        <div
+          class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow flex flex-col gap-3">
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-semibold">Sandscriptory</h2>
+            <span class="text-xs text-gray-500">Predefined and saved scripts</span>
+          </div>
+          <input type="search" x-model="scriptLibraryFilter" placeholder="Search sandscriptory..."
+            class="w-full bg-gray-900/70 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sg-accent/50" />
+          <div
+            class="max-h-80 overflow-y-auto border border-gray-700/60 rounded-lg divide-y divide-gray-800/70 bg-gray-900/20">
+            <template x-for="ex in filteredExampleScripts()" :key="ex.name">
+              <button @click="loadExample(ex)"
+                class="w-full text-left px-3 py-3 transition flex flex-col gap-1 bg-transparent hover:bg-gray-800/40 focus:outline-none focus:ring-2 focus:ring-sg-accent/40"
+                :class="ex.name === activeScriptName ? 'bg-sg-accent/10 ring-1 ring-sg-accent/60' : ''">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="font-medium text-sm truncate" x-text="ex.name"></span>
+                  <div class="flex items-center gap-2">
+                    <span
+                      class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded bg-gray-800/70 border border-gray-700/60 text-gray-300"
+                      x-text="ex.final ? 'Finalized' : 'In Progress'"></span>
+                    <span x-show="ex.name === activeScriptName"
+                      class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded bg-sg-accent/15 border border-sg-accent/50 text-sg-accent">Active</span>
+                  </div>
+                </div>
+                <p class="text-xs text-gray-400 leading-relaxed" x-text="ex.description || 'Custom pattern sandbox.'"></p>
+              </button>
+            </template>
+            <template x-if="!filteredExampleScripts().length">
+              <div class="py-6 text-center text-sm text-gray-500">No scripts match the current search.</div>
+            </template>
           </div>
         </div>
       </section>
@@ -330,31 +361,19 @@
                 class="text-sg-accent/80">time</span> = ms since script start (approx in browser). <span
                 class='text-sg-accent/80'>a % b</span> returns remainder (b==0 → 0).
             </p>
-            <div class="flex flex-wrap gap-2 text-[11px]">
-              <template x-for="ex in exampleScripts" :key="ex.name">
-                <button @click="loadExample(ex)"
-                  :class="'relative px-2 py-1 rounded font-mono transition ' + (ex.final ? 'bg-gray-700 hover:bg-gray-600 border border-sg-accent/50' : 'bg-gray-700 hover:bg-gray-600')">
-                  <span x-text="ex.name"></span>
-                </button>
-              </template>
-              <label class="inline-flex items-center gap-1 ml-auto cursor-pointer select-none text-xs">
-                <input type="checkbox" x-model="autoRecompile"
-                  class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
-                <span>Auto-compile</span>
-              </label>
-              <label class="inline-flex items-center gap-1 cursor-pointer select-none text-xs">
-                <input type="checkbox" x-model="autoSimulate"
-                  class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
-                <span>Auto-sim</span>
-              </label>
+            <div
+              class="text-xs text-gray-400 bg-gray-900/50 border border-gray-700/60 rounded px-3 py-2 flex items-center gap-2">
+              <span class="font-medium text-sg-accent/80">Live Preview</span>
+              <span class="flex-1">Edits are compiled and emulated automatically. Browse the Sandscript Library below to load
+                presets.</span>
             </div>
             <div class="flex gap-3 items-start">
               <textarea x-model="scriptSource"
                 class="w-full h-56 font-mono text-sm bg-gray-900/70 border border-gray-600 rounded p-2 focus:outline-none focus:ring-2 focus:ring-sg-accent/50 resize-y"
                 spellcheck="false"></textarea>
               <div class="flex flex-col gap-2 w-52">
-                <button @click="compileScript()"
-                  class="px-3 py-2 rounded bg-sg-accent hover:bg-sg-accent/80 text-sm font-medium">Compile</button>
+                <button @click="scheduleScriptProcess(true)"
+                  class="px-3 py-2 rounded bg-sg-accent hover:bg-sg-accent/80 text-sm font-medium">Refresh</button>
                 <button @click="simulateScript()" :disabled="!compiledScript || debugStepsEnabled"
                   :class="(!compiledScript || debugStepsEnabled) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-600'"
                   class="px-3 py-2 rounded bg-gray-700 text-sm font-medium">Simulate</button>
@@ -571,29 +590,44 @@ delta_radius = 1 * dir`,
         // scriptSteps removed (infinite logical simulation); max radius computed from device geometry (cm)
         scriptMaxRadius: null,
         // showBytecode removed
-        autoRecompile: true,
-        autoSimulate: true,
+        scriptLibraryFilter: '',
+        activeScriptName: null,
+        lastLoadedScriptCode: null,
+        scriptProcessTimer: null,
+        scriptProcessDelay: 320,
+        skipNextScriptProcess: false,
         exampleScripts: [
           {
-              final: true, name: 'PingPongSharpPetals', code: `# simple back and forth with the ball,
+            final: true,
+            name: 'PingPongSharpPetals',
+            description: 'Sharp directional petals with snappy reversals.',
+            code: `# simple back and forth with the ball,
 # no easing at the edge
 
 # sign(-10...10)
 dir = -sign(steps % 21 - 10)
 
 delta_angle = 3
-delta_radius = 1 * dir` },
+delta_radius = 1 * dir`
+          },
           {
-            final: true, name: 'PingPongSoftPetals', code: `# simple back and forth with the ball 
+            final: true,
+            name: 'PingPongSoftPetals',
+            description: 'Softly eased petals using sinusoidal direction changes.',
+            code: `# simple back and forth with the ball 
 # with sinusoidal easing
 
 # change direction every 15 steps
 dir = sin(steps * 180 / 15) 
 
 delta_angle = 5
-delta_radius = 1 * dir` },
+delta_radius = 1 * dir`
+          },
           {
-            final: true, name: 'MirrorSpiral', code: `# Simple outward/inward spiral mimic (no % operator)
+            final: true,
+            name: 'MirrorSpiral',
+            description: 'Mirrored spiral with gentle easing toward a moving target.',
+            code: `# Simple outward/inward spiral mimic (no % operator)
 # Triangle wave using cosine (period = 2 revs)
 # tri = 0.5 * (1 - cos(rev*180)) gives 0->1 (rev 0-1), 1->0 (rev 1-2)
 tri = 0.5 * (1 - cos(rev*180 / 8))
@@ -602,24 +636,38 @@ target = tri * 10
 # Ease toward target (adjust smoothing factor 0.18)
 next_radius = clamp(radius + (target - radius)*0.18, 0, 10)
 # Constant angular increment (adjust for density)
-next_angle = angle + 15.0` },
-          { final: true, name: 'Butterfly', code: `# Nice butterfly effect
+next_angle = angle + 15.0`
+          },
+          {
+            final: true,
+            name: 'Butterfly',
+            description: 'Fluttering butterfly motif driven by layered sine waves.',
+            code: `# Nice butterfly effect
 phase = sin(rev*90)*10
 ring = sin(angle*4 + phase)*0.40 + sin(angle*7 - phase*0.5)*0.18
 next_radius = clamp(5 + ring*5.0, 0, 10)
-next_angle = angle + 4.5 + sin(angle*6)*0.9` },
-          { name: 'BounceWeave', code: `# Fine-step radial bounce
+next_angle = angle + 4.5 + sin(angle*6)*0.9`
+          },
+          {
+            name: 'BounceWeave',
+            description: 'Layered radial weave with alternating lobe density.',
+            code: `# Fine-step radial bounce
 weave = abs(sin(angle*3))/2 + abs(sin(angle*4.5))/6
 next_radius = clamp(4 + weave*6.0, 0, 10)
-next_angle = angle + 5.8 + sin(angle*5)*1.3` },
+next_angle = angle + 5.8 + sin(angle*5)*1.3`
+          },
           {
-            final: true, name: 'StarPing', code: `# Fine-step star points with directional and radial flips via steps
+            final: true,
+            name: 'StarPing',
+            description: 'Dynamic starburst that flips direction with rhythmic accents.',
+            code: `# Fine-step star points with directional and radial flips via steps
 # Use lower frequency for broader lobes
 radius_oscilation = sin(steps/8) * 3
 dir = sign(cos(steps*0.30))
 arm = abs(sin(angle*2.5))*0.75 + abs(sin(angle*5))*0.28
 next_radius = clamp(1 + arm * 5, 0, 15) + radius_oscilation 
-next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` }
+next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
+          }
         ],
         mirrorMode: false, // new mirror mode toggle (UI control can set this)
         showDSLDetails: false,
@@ -677,6 +725,8 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` }
           // Auto-pause when tab hidden (will implement logic in onVisibilityChange)
           document.addEventListener('visibilitychange', () => this.onVisibilityChange());
           this.regeneratePattern();
+          this.setupScriptProcessing();
+          this.scheduleScriptProcess(true);
           this.log('UI initialized');
         },
         onVisibilityChange() {
@@ -728,6 +778,73 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` }
           });
         },
         setStatus(s) { this.statusMessage = s; this.log(s); },
+        normalizeScript(code) {
+          if (code == null) return '';
+          return code.replace(/\r\n?/g, '\n').trim();
+        },
+        findExampleByCode(code) {
+          const normalized = this.normalizeScript(code);
+          if (!normalized) return null;
+          if (!Array.isArray(this.exampleScripts)) return null;
+          return this.exampleScripts.find(ex => this.normalizeScript(ex.code) === normalized) || null;
+        },
+        setupScriptProcessing() {
+          this.lastLoadedScriptCode = this.normalizeScript(this.scriptSource);
+          const match = this.findExampleByCode(this.scriptSource);
+          this.activeScriptName = match ? match.name : null;
+          this.$watch('scriptSource', (value) => {
+            if (this.skipNextScriptProcess) {
+              this.skipNextScriptProcess = false;
+              return;
+            }
+            const normalized = this.normalizeScript(value);
+            if (this.lastLoadedScriptCode) {
+              if (normalized === this.lastLoadedScriptCode) {
+                const matchAgain = this.findExampleByCode(value);
+                if (matchAgain) {
+                  this.activeScriptName = matchAgain.name;
+                }
+              } else {
+                this.activeScriptName = null;
+              }
+            }
+            this.scheduleScriptProcess();
+          });
+        },
+        scheduleScriptProcess(immediate = false) {
+          if (this.scriptProcessTimer) {
+            clearTimeout(this.scriptProcessTimer);
+            this.scriptProcessTimer = null;
+          }
+          if (immediate) {
+            this.runScriptProcess();
+          } else {
+            const delay = Number.isFinite(this.scriptProcessDelay) ? this.scriptProcessDelay : 300;
+            this.scriptProcessTimer = setTimeout(() => {
+              this.scriptProcessTimer = null;
+              this.runScriptProcess();
+            }, delay);
+          }
+        },
+        runScriptProcess() {
+          const ok = this.compileScript();
+          if (ok) {
+            this.simulateScript({ silent: true, force: true });
+          }
+        },
+        filteredExampleScripts() {
+          const list = Array.isArray(this.exampleScripts) ? this.exampleScripts : [];
+          if (!list.length) return [];
+          const term = (this.scriptLibraryFilter || '').trim().toLowerCase();
+          const working = term
+            ? list.filter(ex => {
+              const name = (ex.name || '').toLowerCase();
+              const desc = (ex.description || '').toLowerCase();
+              return name.includes(term) || desc.includes(term);
+            })
+            : list.slice();
+          return working.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        },
         async connect() {
           if (!navigator.bluetooth) { this.setStatus('Web Bluetooth not supported'); return; }
           if (this.connected || this.connecting) return;
@@ -1624,7 +1741,6 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` }
             this.debugCtx.clearRect(0, 0, this.debugCanvas.width, this.debugCanvas.height);
           }
         },
-        centerView() { this.renderFrame(); },
         toggleSimulation() { if (this.debugStepsEnabled) { this.simulationRunning = false; return; } this.simulationRunning = !this.simulationRunning; if (this.simulationRunning) { this.lastTs = 0; requestAnimationFrame(this.stepSimulation.bind(this)); } },
         stepOnce() {
           if (this.debugStepsEnabled) return;
@@ -2237,17 +2353,47 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` }
       const orig = sandGardenApp; window.sandGardenApp = function () {
         const base = orig(); return Object.assign(base, {
           formatBytecode(bc) { return formatBytecodeListing(bc); },
-          loadExample(ex) { this.scriptSource = ex.code; if (this.autoRecompile) { this.compileScript(); if (this.autoSimulate) this.simulateScript(); } },
-          compileScript() { const res = compileDSL(this.scriptSource); if (!res.ok) { this.compileErrors = res.errors.map(e => ({ message: enhanceErrorMessage(e.message), pos: e.pos })); this.compiledScript = null; } else { this.compileErrors = []; this.compiledScript = res.script; if (this.autoSimulate) this.simulateScript(); } },
-          useScriptPattern() { if (!this.compiledScript) return; this.pattern = 11; this.setStatus('Using custom script'); this.regeneratePattern(); },
-          simulateScript() {
-            if (this.debugStepsEnabled) {
-              this.setStatus('Simulation controlled by device debug stream');
-              return;
+          loadExample(ex) {
+            if (!ex) return;
+            this.skipNextScriptProcess = true;
+            this.scriptSource = ex.code;
+            this.lastLoadedScriptCode = this.normalizeScript(ex.code);
+            this.activeScriptName = ex.name || null;
+            this.scheduleScriptProcess(true);
+            setTimeout(() => { this.skipNextScriptProcess = false; }, 0);
+          },
+          compileScript() {
+            const res = compileDSL(this.scriptSource);
+            if (!res.ok) {
+              this.compileErrors = res.errors.map(e => ({ message: enhanceErrorMessage(e.message), pos: e.pos }));
+              this.compiledScript = null;
+              return false;
             }
-            if (!this.compiledScript) { this.setStatus('Compile first'); return; }
+            this.compileErrors = [];
+            this.compiledScript = res.script;
+            return true;
+          },
+          useScriptPattern() { if (!this.compiledScript) return; this.pattern = 11; this.setStatus('Using custom script'); this.regeneratePattern(); },
+          simulateScript(options = {}) {
+            const { silent = false, force = false } = options;
+            if (this.debugStepsEnabled && !force) {
+              if (!silent) {
+                this.setStatus('Simulation controlled by device debug stream');
+              }
+              return false;
+            }
+            if (!this.compiledScript) {
+              if (!silent) {
+                this.setStatus('Compile first');
+              }
+              return false;
+            }
             if (this.pattern !== 11) this.pattern = 11;
             this.regeneratePattern();
+            if (!silent) {
+              this.setStatus('Sandscript preview regenerated');
+            }
+            return true;
           },
           evalCompiledScript(current, startFlag, MAX_R_STEPS, STEPS_PER_A_AXIS_REV) {
             // Standalone evaluator variant (mirrors factory 11 logic) for preview mode.

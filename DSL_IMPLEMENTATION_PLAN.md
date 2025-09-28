@@ -1,4 +1,4 @@
-# Sand Garden Pattern DSL Implementation Plan
+# Sandscript DSL (domain specific language) Implementation Plan
 
 Status: Working Draft v0.5.0 (web + firmware compilers aligned; zero-division guard unified)
 Date: 2025-09-28
