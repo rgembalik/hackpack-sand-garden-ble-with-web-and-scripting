@@ -97,9 +97,9 @@ struct PatternScriptRuntime {
 };
 
 struct PatternScriptUnits {
-  float stepsPerCm = 800.0f;     // default fallback (override via configure function)
+  float stepsPerCm = 700.0f;     // default fallback (override via configure function)
   float stepsPerDeg = 11.377f;   // steps per degree for angular axis
-  float maxRadiusCm = 15.0f;     // clamp radius (cm)
+  float maxRadiusCm = 10.0f;     // clamp radius (cm)
 };
 
 void configurePatternScriptUnits(const PatternScriptUnits &units);

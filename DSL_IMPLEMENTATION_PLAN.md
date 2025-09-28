@@ -1,7 +1,7 @@
 # Sand Garden Pattern DSL Implementation Plan
 
-Status: Working Draft v0.4.2 (modulus operator implemented in web simulation – firmware compiler pending)
-Date: 2025-09-14
+Status: Working Draft v0.5.0 (web + firmware compilers aligned; zero-division guard unified)
+Date: 2025-09-28
 Owner: (You)
 
 ## Progress Snapshot
@@ -18,9 +18,9 @@ Owner: (You)
 | Physical units abstraction | ✅ Done | Script sees `radius` (cm) & `angle` (deg); internal conversion to steps. |
 | Example scripts (base creative set) | ✅ Refreshed | Vibrant set incl. PingPongPetals, MirrorSpiral, EchoBloom, BounceWeave, StarPing, LaceHelix, RevCascade, StartBurst, PetalDrift, SelfRefWarp. |
 | Firmware scaffold (headers & stubs) | ✅ Done | `PatternScript.h/.cpp` placeholders. |
-| Real firmware compiler | ⏳ Pending | To implement: tokenizer, parser, RPN→compact op list evaluator (CONST/LOAD/ADD/... incl SIGN, CLAMP) matching web op list. |
-| BLE script upload protocol | ⏳ Pending | Plan drafted; not implemented. |
-| Documentation (user-facing usage) | ⏳ Pending | To add quick reference & examples in README / doc. |
+| Real firmware compiler | ✅ Done | `PatternScript.cpp` implements tokenizer, parser, op encoder, and runtime with modulo/sign/time parity (DIV/MOD → 0 on zero denominator). |
+| BLE script upload protocol | ✅ Done | `BLEConfigServer` exposes BEGIN/DATA/END pipeline with timeout + status callbacks. |
+| Documentation (user-facing usage) | 🚧 In progress | README rewrite underway focusing on beginner quick-start + DSL primer. |
 | Internal representation write-up | ⏳ Pending | Section to be expanded (todo). |
 | Progressive enhancement roadmap | ⏳ Pending | Draft list exists; needs refinement to match new unit model. |
 | `rev` synthetic input | ✅ Done | Continuous revolution counter (unwrappedAngleDeg / 360). |
@@ -38,7 +38,7 @@ Provide a **minimal, math-expression style DSL** to define motion patterns for t
 - Runs in the HTML client for preview & visualization.
 - Can be embedded as built-in patterns (flash constants) or uploaded via BLE (chunked if needed).
 
-## 2. Current Scope (v0 Requirements – Updated v0.4.2)
+## 2. Current Scope (v0 Requirements – Updated v0.5.0)
 | Feature | Included v0 | Notes |
 |---------|-------------|-------|
 | Absolute outputs | Yes | Provide next absolute polar target. |
@@ -462,50 +462,11 @@ ADD
 | Local variable limit | Tentatively 8 (review after MCU memory test). |
 | BLE framing ASCII vs Binary first? | ASCII for debugging. |
 
-## 20. Next Immediate Actions (v0.4.2)
-1. Implement firmware compiler & op encoder with updated opcode map (include OP_MOD 0x07 and shifted NEG..SIGN) and new input indices for `steps` & `time`.
-2. Add runtime fields: `uint32_t stepCounter; uint32_t startMillis;` convert to float for VM LOAD; increment stepCounter before each eval.
-3. Provide continuous time injection; consider `millis()` first, optionally abstract to high-res if drift impacts patterns.
-4. Build parity harness: run scripts A–H plus new temporal/modulo scripts (I,J – to author) in both web (forced deterministic time) and firmware; compare outputs for N steps.
-5. Add README quick reference (inputs, outputs, operators, functions, temporal vars, zero-div behavior, local variable rules).
-6. Implement BLE upload path (BEGIN/DATA/END framing) returning numeric error codes; map to short text.
-7. Add deterministic test mode build flag to freeze `time` progression (e.g. +16ms per eval) for automated tests.
-8. Bench memory & stack usage with worst-case expression (deep clamp/sign nesting) adjust `PSG_STACK_DEPTH` if needed (>16?).
-9. Document final opcode table and variable index mapping in header (`PatternScript.h`) with version tag `PSG_DSL_VERSION 0x0402`.
-- Variable index ordering differs if legacy firmware reserved indices 4..7 for outputs. Decide final ordering early to avoid script meaning drift.
+## 20. Next Immediate Actions (v0.5.0)
 
-Convergence plan:
-1. Freeze variable index mapping (documented in Section 7.2) and implement identical ordering in firmware.
-2. Provide a compile-time constant to optionally disable temporal inputs (maps LOAD indices 4 & 5 to 0) for resource-constrained builds.
-3. Add a deterministic test harness path where `time` advances by fixed delta (e.g. 16.666 ms) for parity testing.
 
-## 21. Next Immediate Actions (v0.4.1)
-1. Implement firmware compiler & op encoder exactly per Section 7.2/7.3 including indices for `steps` & `time` and OP_MOD.
-2. Add automated parity tests (host) comparing MCU compiled ops vs web evaluation for scripts A–H plus new temporal & modulo example (see below).
-3. Provide deterministic test mode feeding synthetic `time` increments instead of real clock.
-4. Decide and finalize variable index ordering (update doc if diverging from proposed) before first firmware release.
-5. Write README Quick Reference (inputs, outputs, functions, continuous `rev`, `steps`, `time`, mirror patterns, locals, limits).
-6. Implement BLE upload path and return numeric error codes; map to short text.
-7. Add optional build flag disabling temporal inputs (maps `steps`,`time` to 0) for legacy parity.
-8. Add build flag forcing IEEE compliance (disable `-ffast-math`) for parity test builds; optionally allow faster math in release.
-9. Document clamp/sign/mod NaN handling in README; ensure firmware zeroes on NaN or b==0 for div/mod.
-10. Add temporal pattern & modulo example script (see below) to test set.
-11. Implement OP_MOD in firmware using fmodf with epsilon guard.
+## 21. Deferred / Nice-to-haves
+1. Explore constant-pool compression or 16-bit literal packing to shrink large scripts.
+2. Add additional math functions (wrapClamp? other trigs?)
 
-Temporal example (new Test Script I):
-```
-# Radius breathing with time (period ~4s) & step-based angular increment
-phase = sin(time * 0.090)           # time in ms -> 0.090 ~= 2*pi / (1000*11.11) adjust as desired
-next_radius = clamp(7.5 + phase * 7.5, 0, 15)
-next_angle = angle + 6 + 2 * sin(steps * 3)
-```
-
-Modulo example (Test Script J):
-```
-# Petal indexing using modulo every 7 steps
-idx = steps % 7
-next_radius = clamp(3 + idx * 0.8, 0, 15)
-next_angle = angle + 30
-```
-
-**End of Plan v0.4.2 Draft**
+**End of Plan v0.5.0 Draft**

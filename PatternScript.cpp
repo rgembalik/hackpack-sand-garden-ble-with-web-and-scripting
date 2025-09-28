@@ -15,9 +15,9 @@ static inline float degToRad(float deg) {
 
 void configurePatternScriptUnits(const PatternScriptUnits &units) {
   g_units = units;
-  if (g_units.stepsPerCm <= 0.0f) g_units.stepsPerCm = 800.0f;
+  if (g_units.stepsPerCm <= 0.0f) g_units.stepsPerCm = 700.0f;
   if (g_units.stepsPerDeg <= 0.0f) g_units.stepsPerDeg = 11.377f;
-  if (g_units.maxRadiusCm <= 0.0f) g_units.maxRadiusCm = 15.0f;
+  if (g_units.maxRadiusCm <= 0.0f) g_units.maxRadiusCm = 10.0f;
 }
 
 static const char *ERR_PREFIX = "PSG:";
@@ -663,28 +663,28 @@ Positions evalPatternScript(const PatternScript &ps, PatternScriptRuntime &rt, c
     return result;
   }
 
-  if (!rt.initialized || startFlag) {
-    rt.initialized = true;
-    rt.prevAngleDeg = 0.0f;
-    rt.unwrappedAngleDeg = 0.0f;
-    rt.stepCounter = 0;
-    rt.startMillis = millis();
-  }
-
-  float stepsPerCm = g_units.stepsPerCm > 0 ? g_units.stepsPerCm : 800.0f;
+  float stepsPerCm = g_units.stepsPerCm > 0 ? g_units.stepsPerCm : 700.0f;
   float stepsPerDeg = g_units.stepsPerDeg > 0 ? g_units.stepsPerDeg : 11.377f;
-  float maxRadiusCm = g_units.maxRadiusCm > 0 ? g_units.maxRadiusCm : 15.0f;
+  float maxRadiusCm = g_units.maxRadiusCm > 0 ? g_units.maxRadiusCm : 10.0f;
 
   float radiusCm = current.radial / stepsPerCm;
   float angleDeg = current.angular / stepsPerDeg;
   angleDeg = wrapDeg(angleDeg);
 
   uint32_t nowMs = millis();
-  float deltaDeg = angleDeg - rt.prevAngleDeg;
-  if (deltaDeg > 180.0f) deltaDeg -= 360.0f;
-  if (deltaDeg < -180.0f) deltaDeg += 360.0f;
-  rt.unwrappedAngleDeg += deltaDeg;
-  rt.prevAngleDeg = angleDeg;
+  if (!rt.initialized || startFlag) {
+    rt.initialized = true;
+    rt.prevAngleDeg = angleDeg;
+    rt.unwrappedAngleDeg = angleDeg;
+    rt.stepCounter = 0;
+    rt.startMillis = nowMs;
+  } else {
+    float deltaDeg = angleDeg - rt.prevAngleDeg;
+    if (deltaDeg > 180.0f) deltaDeg -= 360.0f;
+    else if (deltaDeg < -180.0f) deltaDeg += 360.0f;
+    rt.unwrappedAngleDeg += deltaDeg;
+    rt.prevAngleDeg = angleDeg;
+  }
 
   float vars[PSG_VAR_MAX] = {0.0f};
   vars[PSG_VAR_RADIUS] = radiusCm;
@@ -738,15 +738,21 @@ Positions evalPatternScript(const PatternScript &ps, PatternScriptRuntime &rt, c
         case PSG_OP_DIV: {
           float b = stack[--sp];
           float a = stack[--sp];
-          if (fabsf(b) < 1e-6f) b = 1e-6f;
-          stack[sp++] = a / b;
+          if (fabsf(b) < 1e-6f) {
+            stack[sp++] = 0.0f;
+          } else {
+            stack[sp++] = a / b;
+          }
           break;
         }
         case PSG_OP_MOD: {
           float b = stack[--sp];
           float a = stack[--sp];
-          if (fabsf(b) < 1e-6f) b = 1e-6f;
-          stack[sp++] = fmodf(a, b);
+          if (fabsf(b) < 1e-6f) {
+            stack[sp++] = 0.0f;
+          } else {
+            stack[sp++] = fmodf(a, b);
+          }
           break;
         }
         case PSG_OP_NEG: {

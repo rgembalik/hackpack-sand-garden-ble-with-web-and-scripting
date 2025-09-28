@@ -173,7 +173,8 @@
               <dt class="text-gray-400">Pattern</dt>
               <dd class="font-mono">
                 <span x-text="pattern + ' - ' + patternMeta[pattern-1].name"></span>
-                <span x-show="patternMeta[pattern-1].type==='builtin'" class="ml-1 align-middle text-[10px] leading-none px-1.5 py-0.5 rounded bg-gray-700/60 text-amber-300 uppercase tracking-wide">preview</span>
+                <span x-show="patternMeta[pattern-1].type==='builtin'"
+                  class="ml-1 align-middle text-[10px] leading-none px-1.5 py-0.5 rounded bg-gray-700/60 text-amber-300 uppercase tracking-wide">preview</span>
               </dd>
             </div>
             <div>
@@ -206,8 +207,7 @@
             </label>
             <label class="inline-flex items-center gap-2 cursor-pointer select-none"
               :class="!connected ? 'opacity-50' : ''">
-              <input type="checkbox" :checked="debugStepsEnabled" :disabled="!connected"
-                @change="onDebugToggle($event)"
+              <input type="checkbox" :checked="debugStepsEnabled" :disabled="!connected" @change="onDebugToggle($event)"
                 class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
               <span class="text-sm">Device Debug Stream</span>
             </label>
@@ -249,7 +249,8 @@
                   <div class="flex justify-between items-center gap-2">
                     <div class="flex items-center gap-2 min-w-0">
                       <span class="font-medium truncate" x-text="p.id + '. ' + p.name"></span>
-                      <span x-show="p.type==='builtin'" class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700/70 text-amber-300 uppercase tracking-wide">Preview</span>
+                      <span x-show="p.type==='builtin'"
+                        class="text-[10px] px-1.5 py-0.5 rounded bg-gray-700/70 text-amber-300 uppercase tracking-wide">Preview</span>
                     </div>
                     <span class="text-xs text-gray-400 shrink-0" x-text="p.short"></span>
                   </div>
@@ -263,8 +264,10 @@
           <h2 class="text-lg font-semibold mb-3">Pattern Details</h2>
           <div class="text-sm text-gray-300" x-text="patternMeta[pattern-1].description"></div>
           <div class="mt-2 flex items-start gap-2" x-show="patternMeta[pattern-1].type==='builtin'">
-            <span class="text-[11px] px-2 py-1 rounded bg-gray-700/60 text-amber-300 uppercase tracking-wide">Preview Only</span>
-            <span class="text-xs text-gray-500 leading-relaxed">Built-in firmware-style pattern simulation for visualization; not sent live.</span>
+            <span class="text-[11px] px-2 py-1 rounded bg-gray-700/60 text-amber-300 uppercase tracking-wide">Preview
+              Only</span>
+            <span class="text-xs text-gray-500 leading-relaxed">Built-in firmware-style pattern simulation for
+              visualization; not sent live.</span>
           </div>
         </div>
       </section>
@@ -301,7 +304,7 @@
           </div>
         </section>
 
-  <!-- Sandscript Panel (formerly DSL) -->
+        <!-- Sandscript Panel (formerly DSL) -->
         <section class="space-y-6 xl:col-span-2 xl:col-start-2">
           <div
             class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow space-y-3">
@@ -318,8 +321,15 @@
                 class='font-mono text-sg-accent'>next_angle</code>, <code
                 class='font-mono text-sg-accent'>delta_radius</code>, <code
                 class='font-mono text-sg-accent'>delta_angle</code>. Inputs: <code class='font-mono'>radius</code>,
-              <code class='font-mono'>angle</code>, <code class='font-mono'>steps</code>, <code class='font-mono'>time</code>, <code class='font-mono'>start</code>, <code class='font-mono'>rev</code><span class="text-gray-500">(legacy)</span>. Operators: <code class='font-mono'>+ - * / %</code>. Functions: <code class='font-mono'>sin cos abs clamp sign</code>. Trig
-              uses degrees. <span class="text-sg-accent/80">steps</span> = evaluation count since start (0-based), <span class="text-sg-accent/80">time</span> = ms since script start (approx in browser). <span class='text-sg-accent/80'>a % b</span> returns remainder (b==0 → 0).</p>
+              <code class='font-mono'>angle</code>, <code class='font-mono'>steps</code>, <code
+                class='font-mono'>time</code>, <code class='font-mono'>start</code>, <code
+                class='font-mono'>rev</code><span class="text-gray-500">(legacy)</span>. Operators: <code
+                class='font-mono'>+ - * / %</code>. Functions: <code class='font-mono'>sin cos abs clamp sign</code>.
+              Trig
+              uses degrees. <span class="text-sg-accent/80">steps</span> = evaluation count since start (0-based), <span
+                class="text-sg-accent/80">time</span> = ms since script start (approx in browser). <span
+                class='text-sg-accent/80'>a % b</span> returns remainder (b==0 → 0).
+            </p>
             <div class="flex flex-wrap gap-2 text-[11px]">
               <template x-for="ex in exampleScripts" :key="ex.name">
                 <button @click="loadExample(ex)"
@@ -353,12 +363,11 @@
                   :class="(!compiledScript || !connected || scriptUploadInProgress) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-sg-accent/90'"
                   class="px-3 py-2 rounded bg-sg-accent text-sm font-medium flex items-center justify-center gap-2">
                   <span x-text="scriptUploadInProgress ? 'Uploading…' : 'Send to Device'"></span>
-                  <span x-show="scriptUploadInProgress" class="text-xs" x-text="scriptUploadProgress + '%'" ></span>
+                  <span x-show="scriptUploadInProgress" class="text-xs" x-text="scriptUploadProgress + '%'"></span>
                 </button>
                 <label class="text-xs text-gray-300 flex flex-col gap-1">
                   Target slot (optional)
-                  <input type="number" min="1" step="1" x-model="scriptTargetSlot"
-                    placeholder="auto"
+                  <input type="number" min="1" step="1" x-model="scriptTargetSlot" placeholder="auto"
                     class="bg-gray-900/70 border border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-sg-accent/50" />
                 </label>
                 <div class="text-xs text-gray-400 min-h-[1.5rem]" x-show="scriptUploadStatus"
@@ -434,11 +443,13 @@
                 <div class="sm:col-span-2 border-t border-gray-800 pt-3">
                   <div class="flex flex-wrap items-center gap-3 mb-2">
                     <h4 class="font-semibold text-sg-accent">Device Step Telemetry</h4>
-                    <span class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded bg-gray-800/70 border border-gray-700/70"
+                    <span
+                      class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded bg-gray-800/70 border border-gray-700/70"
                       :class="debugStepsEnabled ? 'text-emerald-300 border-emerald-500/40' : 'text-gray-400'">
                       Stream: <span x-text="debugStepsEnabled ? 'On' : 'Off'"></span>
                     </span>
-                    <span class="text-[10px] px-2 py-0.5 rounded bg-gray-800/70 text-gray-300 border border-gray-700/70">
+                    <span
+                      class="text-[10px] px-2 py-0.5 rounded bg-gray-800/70 text-gray-300 border border-gray-700/70">
                       Steps: <span x-text="debugPoints.length"></span>
                     </span>
                   </div>
@@ -446,38 +457,36 @@
                     <div class="grid sm:grid-cols-2 gap-3 font-mono text-[11px] leading-relaxed">
                       <ul class="space-y-0.5">
                         <li>Index: <span x-text="lastDebugStep.idx"></span></li>
-                        <li>Actual steps (r / a): <span
-                            x-text="lastDebugStep.radialSteps + ' / ' + lastDebugStep.angularSteps"></span></li>
-                        <li>Actual radius (mm): <span x-text="fmtNum(lastDebugStep.radiusMm)"></span></li>
-                        <li>Actual angle (°): <span x-text="fmtNum(lastDebugStep.angleDeg)"></span></li>
-                        <li>XY (mm): <span
-                            x-text="fmtNum(lastDebugStep.xMm) + ', ' + fmtNum(lastDebugStep.yMm)"></span></li>
+                        <li>Current radius (mm): <span x-text="fmtNum(lastDebugStep.radiusMm)"></span></li>
+                        <li>Current angle (°): <span x-text="fmtNum(lastDebugStep.angleDeg)"></span></li>
+                        <li>XY (mm): <span x-text="fmtNum(lastDebugStep.xMm) + ', ' + fmtNum(lastDebugStep.yMm)"></span>
+                        </li>
                         <li>Received: <span x-text="formatClock(lastDebugStep.receivedAt)"></span></li>
                       </ul>
                       <ul class="space-y-0.5">
-            <li x-show="lastDebugStep.plannedRadial != null" :class="lastDebugStep.mismatchRadial ? 'text-red-400' : ''">Planned steps (r / a): <span
-                            x-text="lastDebugStep.plannedRadial + ' / ' + lastDebugStep.plannedAngular"></span></li>
-            <li x-show="lastDebugStep.simulatedRadialSteps != null">Sim steps (r / a): <span
-              x-text="lastDebugStep.simulatedRadialSteps + ' / ' + lastDebugStep.simulatedAngularSteps"></span></li>
-            <li x-show="lastDebugStep.plannedRadiusMm != null" :class="lastDebugStep.mismatchRadial ? 'text-red-400' : ''">Planned radius (mm): <span
-              x-text="fmtNum(lastDebugStep.plannedRadiusMm)"></span></li>
-            <li x-show="lastDebugStep.simulatedRadiusMm != null">Sim radius (mm): <span
-              x-text="fmtNum(lastDebugStep.simulatedRadiusMm)"></span></li>
-            <li x-show="lastDebugStep.plannedAngleDeg != null" :class="lastDebugStep.mismatchAngular ? 'text-red-400' : ''">Planned angle (°): <span
-              x-text="fmtNum(lastDebugStep.plannedAngleDeg)"></span></li>
-            <li x-show="lastDebugStep.simulatedAngleDeg != null">Sim angle (°): <span
-              x-text="fmtNum(lastDebugStep.simulatedAngleDeg)"></span></li>
-            <li x-show="lastDebugStep.simulationError" class="text-red-300">Sim error: <span
-              x-text="lastDebugStep.simulationError"></span></li>
-                        <li x-show="lastDebugStep.deltaRadialSteps != null">Δ steps (r / a): <span
-                            x-text="lastDebugStep.deltaRadialSteps + ' / ' + lastDebugStep.deltaAngularSteps"></span></li>
+                        <li x-show="lastDebugStep.simulatedRadialSteps != null">Sim steps (r / a): <span
+                            x-text="lastDebugStep.simulatedRadialSteps + ' / ' + lastDebugStep.simulatedAngularSteps"></span>
+                        </li>
+                        <li x-show="lastDebugStep.plannedRadiusMm != null"
+                          :class="lastDebugStep.mismatchRadial ? 'text-red-400' : ''">Planned radius (mm): <span
+                            x-text="fmtNum(lastDebugStep.plannedRadiusMm)"></span></li>
+                        <li x-show="lastDebugStep.simulatedRadiusMm != null">Sim radius (mm): <span
+                            x-text="fmtNum(lastDebugStep.simulatedRadiusMm)"></span></li>
+                        <li x-show="lastDebugStep.plannedAngleDeg != null"
+                          :class="lastDebugStep.mismatchAngular ? 'text-red-400' : ''">Planned angle (°): <span
+                            x-text="fmtNum(lastDebugStep.plannedAngleDeg)"></span></li>
+                        <li x-show="lastDebugStep.simulatedAngleDeg != null">Sim angle (°): <span
+                            x-text="fmtNum(lastDebugStep.simulatedAngleDeg)"></span></li>
+                        <li x-show="lastDebugStep.simulationError" class="text-red-300">Sim error: <span
+                            x-text="lastDebugStep.simulationError"></span></li>
                         <li x-show="lastDebugStep.deltaRadiusMm != null">Δ radius (mm): <span
                             x-text="fmtNum(lastDebugStep.deltaRadiusMm)"></span></li>
                         <li>Pattern / Mode / Run: <span
                             x-text="(lastDebugStep.pattern != null ? lastDebugStep.pattern : '-') + ' • ' + (lastDebugStep.auto ? 'Auto' : 'Manual') + ' • ' + (lastDebugStep.running ? 'Running' : 'Stopped')"></span>
                         </li>
-                        <li>Start: <span x-text="lastDebugStep.start ? 'Yes' : 'No'"></span><span x-show="lastDebugStep.tag"
-                            class="ml-2">Tag: <span x-text="lastDebugStep.tag"></span></span></li>
+                        <li>Start: <span x-text="lastDebugStep.start ? 'Yes' : 'No'"></span><span
+                            x-show="lastDebugStep.tag" class="ml-2">Tag: <span x-text="lastDebugStep.tag"></span></span>
+                        </li>
                       </ul>
                     </div>
                   </template>
@@ -509,25 +518,25 @@
         autoMode: true,
         speedMultiplier: 1.0,
         pattern: 1,
-  // Trails always enabled now (formerly showTrails toggle removed)
+        // Trails always enabled now (formerly showTrails toggle removed)
         statusMessage: 'Idle',
         logs: [],
-  device: null, server: null,
-  chars: { speed: null, pattern: null, status: null, mode: null, run: null, telemetry: null, command: null, script: null },
-    debugStepsEnabled: false,
-    debugCanvas: null,
-    debugCtx: null,
-    debugPoints: [],
-    debugMaxPoints: 8000,
-    deviceSimToleranceSteps: 2,
-    deviceStepsPerMm: 81.4849,
-    deviceStepsPerCm: 81.4849 * 10,
-    debugLastCanvasPoint: null,
-    debugSimulationPoints: [],
-    lastDebugStep: null,
-    maxRadiusSteps: 7000,
-    stepsPerARev: 2 * 2048,
-    trayRadiusFactor: 0.48,
+        device: null, server: null,
+        chars: { speed: null, pattern: null, status: null, mode: null, run: null, telemetry: null, command: null, script: null },
+        debugStepsEnabled: false,
+        debugCanvas: null,
+        debugCtx: null,
+        debugPoints: [],
+        debugMaxPoints: 8000,
+        deviceSimToleranceSteps: 2,
+  deviceStepsPerMm: 70,
+  deviceStepsPerCm: 70 * 10,
+        debugLastCanvasPoint: null,
+        debugSimulationPoints: [],
+        lastDebugStep: null,
+        maxRadiusSteps: 7000,
+        stepsPerARev: 2 * 2048,
+        trayRadiusFactor: 0.48,
         // Telemetry state
         joy: { a: 0, r: 0, mag: 0 }, lastState: { pat: null, auto: null, run: null, brt: null }, heartbeatCount: 0,
         patternMeta: [
@@ -545,82 +554,92 @@
           { id: 11, type: 'sandscript', name: 'Sandscript', short: 'script', description: 'Your custom Sandscript.', pointsTarget: 2000 }
         ],
         scriptPatternId: 11,
-  // Sandscript state (internal variables still prefixed dsl for now)
-  scriptSource: `# simple back and forth with the ball, no easing at the edge
+        // Sandscript state (internal variables still prefixed dsl for now)
+        scriptSource: `# simple back and forth with the ball,
+# no easing at the edge
 
-dir = -sign(steps % 30 - 15)
+# sign(-10...10)
+dir = -sign(steps % 21 - 10)
 
-delta_angle = 1
+delta_angle = 3
 delta_radius = 1 * dir`,
         compileErrors: [],
         compiledScript: null,
         // Continuous revolution tracking for DSL (rev variable)
         revPrevAngleDeg: null,
         revUnwrappedAngleDeg: 0,
-        // scriptSteps removed (infinite logical simulation); max radius locked by constant below
-        scriptMaxRadius: 15, // in cm (change in code only)
+        // scriptSteps removed (infinite logical simulation); max radius computed from device geometry (cm)
+        scriptMaxRadius: null,
         // showBytecode removed
         autoRecompile: true,
         autoSimulate: true,
-  exampleScripts: [
-          { final: true, name: 'PingPongSharpPetals', code: `# simple back and forth with the ball,
+        exampleScripts: [
+          {
+              final: true, name: 'PingPongSharpPetals', code: `# simple back and forth with the ball,
 # no easing at the edge
 
-dir = -sign(steps % 30 - 15)
+# sign(-10...10)
+dir = -sign(steps % 21 - 10)
 
-delta_angle = 1
+delta_angle = 3
 delta_radius = 1 * dir` },
-          { final: true, name: 'PingPongSoftPetals', code: `# simple back and forth with the ball 
+          {
+            final: true, name: 'PingPongSoftPetals', code: `# simple back and forth with the ball 
 # with sinusoidal easing
 
-dir = sin(steps * 180 / 23)
+# change direction every 15 steps
+dir = sin(steps * 180 / 15) 
 
-delta_angle = 1
+delta_angle = 5
 delta_radius = 1 * dir` },
-          { final: true, name: 'MirrorSpiral', code: `# Simple outward/inward spiral mimic (no % operator)
+          {
+            final: true, name: 'MirrorSpiral', code: `# Simple outward/inward spiral mimic (no % operator)
 # Triangle wave using cosine (period = 2 revs)
 # tri = 0.5 * (1 - cos(rev*180)) gives 0->1 (rev 0-1), 1->0 (rev 1-2)
 tri = 0.5 * (1 - cos(rev*180 / 8))
 # Target radius
-target = tri * 15
+target = tri * 10
 # Ease toward target (adjust smoothing factor 0.18)
-next_radius = clamp(radius + (target - radius)*0.18, 0, 15)
+next_radius = clamp(radius + (target - radius)*0.18, 0, 10)
 # Constant angular increment (adjust for density)
 next_angle = angle + 15.0` },
-          { final: true, name: 'Butterfly', code: `# Nice butterfly effect\nphase = sin(rev*90)*10\nring = sin(angle*4 + phase)*0.40 + sin(angle*7 - phase*0.5)*0.18\nnext_radius = clamp(7.5 + ring*6.0, 0, 15)\nnext_angle = angle + 4.5 + sin(angle*6)*0.9` },
-          { name: 'BounceWeave', code: `# Fine-step radial bounce\nweave = abs(sin(angle*3))*0.55 + abs(sin(angle*11))*0.20\nnext_radius = clamp(6 + weave*6.0, 0, 15)\nnext_angle = angle + 5.8 + sin(angle*5)*1.3` },
-          { final: true,name: 'StarPing', code: `# Fine-step star points with directional and radial flips via steps
+          { final: true, name: 'Butterfly', code: `# Nice butterfly effect
+phase = sin(rev*90)*10
+ring = sin(angle*4 + phase)*0.40 + sin(angle*7 - phase*0.5)*0.18
+next_radius = clamp(5 + ring*5.0, 0, 10)
+next_angle = angle + 4.5 + sin(angle*6)*0.9` },
+          { name: 'BounceWeave', code: `# Fine-step radial bounce
+weave = abs(sin(angle*3))/2 + abs(sin(angle*4.5))/6
+next_radius = clamp(4 + weave*6.0, 0, 10)
+next_angle = angle + 5.8 + sin(angle*5)*1.3` },
+          {
+            final: true, name: 'StarPing', code: `# Fine-step star points with directional and radial flips via steps
 # Use lower frequency for broader lobes
-radius_oscilation = sin(steps/8) * 4
+radius_oscilation = sin(steps/8) * 3
 dir = sign(cos(steps*0.30))
 arm = abs(sin(angle*2.5))*0.75 + abs(sin(angle*5))*0.28
-next_radius = clamp(4 + arm*7.2, 0, 15) + radius_oscilation 
-next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
-          { name: 'LaceHelix', code: `# Fine-step lace helix\nmod = sin(angle*4)*0.24 + sin(angle*9)*0.16 + sin(angle*13)*0.11\nnext_radius = clamp(radius + 0.06 + mod, 0, 15)\nnext_angle = angle + 5 + sin(angle*5)*1.5` },
-          { name: 'RevCascade', code: `# Fine-step growth bursts (steps-based)\nphase = sign(cos(steps*0.40))\nnext_radius = clamp(radius + 0.08 + phase*0.12 + sin(angle*6)*0.18, 0, 15)\nnext_angle = angle + 6 + sin(angle*4)*1.2` },
-          { name: 'StartBurst', code: `# Fine-step start flare then weave\nflare = start*4.5\nnext_radius = clamp(radius + flare + sin(angle*5)*0.25, 0, 15)\nnext_angle = angle + 6 + sin(angle*3)*1.4` },
-          { name: 'PetalDrift', code: `# Fine-step outward drift petals\nwave = sin(angle*6)*0.42 + sin(angle*11)*0.12\nnext_radius = clamp(radius + 0.07 + wave*0.25, 0, 15)\nnext_angle = angle + 5.5 + sin(angle*4)*1.3` },
-          { name: 'SelfRefWarp', code: `# Fine-step self-referential warp spiral\nnext_radius = clamp(radius + 0.14 - radius*0.008, 0, 15)\nnext_angle = angle + 5.5 + 7*sin(next_radius*10)` }
+next_radius = clamp(1 + arm * 5, 0, 15) + radius_oscilation 
+next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` }
         ],
         mirrorMode: false, // new mirror mode toggle (UI control can set this)
         showDSLDetails: false,
         lastDSLInputs: null,
         lastDSLOutputs: null,
-  lastDSLLocals: null,
-    // DSL temporal counters
-    dslStepCounter: 0, // increments per DSL evaluation (pattern 11)
-    dslStartTimestamp: null, // performance.now() when DSL pattern generation started
-  // Sequences for per-step DSL inputs/outputs (pattern 11 only)
-  dslInputsSeq: [],
-  dslOutputsSeq: [],
-  dslLocalsSeq: [],
+        lastDSLLocals: null,
+        // DSL temporal counters
+        dslStepCounter: 0, // increments per DSL evaluation (pattern 11)
+        dslStartTimestamp: null, // performance.now() when DSL pattern generation started
+        // Sequences for per-step DSL inputs/outputs (pattern 11 only)
+        dslInputsSeq: [],
+        dslOutputsSeq: [],
+        dslLocalsSeq: [],
         scriptUploadInProgress: false,
         scriptUploadProgress: 0,
         scriptUploadStatus: '',
         scriptTargetSlot: '',
         maxScriptBytes: 512,
-  preferredScriptChunkSize: null,
-  scriptWriteModePreference: 'withResponse',
+        preferredScriptChunkSize: null,
+        scriptWriteModePreference: 'withResponse',
         fmtNum(n) { if (n == null || !isFinite(n)) return '-'; return (Math.abs(n) < 0.001 ? n.toExponential(2) : n.toFixed(3)).replace(/\.0+$/, '').replace(/(\.[0-9]*?)0+$/, '$1'); },
         formatClock(ts) {
           if (!ts) return '-';
@@ -638,7 +657,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
         trailInitialized: false, ballPrevImage: null, ballPrevBox: null,
         // simulation timing (distance based)
         simulationRunning: false, linearSpeed: 300, lastTs: 0,
-  wasSimulationRunningBeforeHide: false, // track pre-visibility state for auto-resume
+        wasSimulationRunningBeforeHide: false, // track pre-visibility state for auto-resume
         simulationDistance: 0, totalPathLength: 0,
         segmentLengths: [], segmentEndDistances: [], segmentIndex: 0,
         segmentPolar: [], // per segment polar interpolation data {r0,r1,dr,theta0,theta1,dθ,length}
@@ -652,6 +671,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
           if (this.debugCanvas) {
             this.debugCtx = this.debugCanvas.getContext('2d');
           }
+          this.scriptMaxRadius = this.maxRadiusSteps / this.deviceStepsPerCm;
           this.resizeCanvas();
           window.addEventListener('resize', () => this.resizeCanvas());
           // Auto-pause when tab hidden (will implement logic in onVisibilityChange)
@@ -881,7 +901,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
             this.clearDebugTrail();
           }
 
-          const mmPerStep = (this.maxRadiusSteps > 0) ? ((this.scriptMaxRadius * 10) / this.maxRadiusSteps) : 0;
+          const mmPerStep = this.deviceStepsPerMm > 0 ? (1 / this.deviceStepsPerMm) : 0;
           let radiusMm = toFloat(kv.mm ?? kv.rm);
           if (radiusMm == null) {
             radiusMm = mmPerStep ? actualR * mmPerStep : null;
@@ -1176,7 +1196,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
           const clampedR = Math.max(0, Math.min(radiusLimit, rSteps));
           const norm = clampedR / radiusLimit;
           const radiusPx = norm * trayRadius;
-          const theta = (aSteps / this.stepsPerARev) * Math.PI * 2;
+          const theta = -(aSteps / this.stepsPerARev) * Math.PI * 2;
           const cx = this.canvas.width / 2;
           const cy = this.canvas.height / 2;
           return { x: cx + radiusPx * Math.cos(theta), y: cy + radiusPx * Math.sin(theta) };
@@ -1594,7 +1614,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
           this.drawBackground();
           this.renderFrame();
         },
-  clearPattern() { this.points = []; this.resetTrail(); this.clearDebugTrail(); this.drawBackground(); this.renderFrame(); },
+        clearPattern() { this.points = []; this.resetTrail(); this.clearDebugTrail(); this.drawBackground(); this.renderFrame(); },
         resetTrail() { this.lastHeadX = null; this.lastHeadY = null; this.trailInitialized = false; this.ballPrevImage = null; this.ballPrevBox = null; },
         clearDebugTrail() {
           this.debugPoints = [];
@@ -1610,7 +1630,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
           if (this.debugStepsEnabled) return;
           if (this.simulationRunning) return; // disabled while running
           if (this.points.length < 2 || this.segmentPolar.length === 0) return;
-            // Determine advance distance: move to end of current segment, or wrap if at end
+          // Determine advance distance: move to end of current segment, or wrap if at end
           const currentSegLen = this.segmentLengths[this.segmentIndex] || 0;
           const segStartDist = this.segmentIndex === 0 ? 0 : this.segmentEndDistances[this.segmentIndex - 1];
           const distWithin = this.simulationDistance - segStartDist;
@@ -1804,7 +1824,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
           const polarToXY = (rSteps, aSteps) => {
             const clampedR = Math.max(0, Math.min(MAX_R_STEPS, rSteps));
             const rNorm = clampedR / MAX_R_STEPS; const rPx = rNorm * trayR;
-            const theta = (aSteps / STEPS_PER_A_AXIS_REV) * (Math.PI * 2);
+            const theta = -(aSteps / STEPS_PER_A_AXIS_REV) * (Math.PI * 2);
             return { x: cx + rPx * Math.cos(theta), y: cy + rPx * Math.sin(theta) };
           };
 
@@ -2023,8 +2043,8 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
             11: () => { // Custom Sandscript (units radius: cm, angle: degrees, rev continuous, steps & time)
               const stepsPerRev = STEPS_PER_A_AXIS_REV;
               const degToSteps = stepsPerRev / 360;
-              const maxRadiusCm = this.scriptMaxRadius;
-              const stepsPerCm = MAX_R_STEPS / maxRadiusCm;
+              const stepsPerCm = this.deviceStepsPerCm;
+              const maxRadiusCm = (this.scriptMaxRadius != null) ? this.scriptMaxRadius : (this.maxRadiusSteps / stepsPerCm);
               // Reset rev tracking on new factory creation
               this.revPrevAngleDeg = null; this.revUnwrappedAngleDeg = 0;
               // Reset sequences
@@ -2061,7 +2081,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
                 if (has(values.next_angle)) outAngleDeg = values.next_angle; else if (has(values.delta_angle)) outAngleDeg = currentAngleDeg + values.delta_angle;
                 outRadiusCm = Math.max(0, Math.min(maxRadiusCm, outRadiusCm));
                 outAngleDeg = ((outAngleDeg % 360) + 360) % 360;
-                const radialSteps = Math.round(outRadiusCm * stepsPerCm);
+                const radialSteps = Math.max(0, Math.min(MAX_R_STEPS, Math.round(outRadiusCm * stepsPerCm)));
                 const angleSteps = Math.round(outAngleDeg * degToSteps) % stepsPerRev;
                 return { radial: radialSteps, angular: angleSteps };
               };
@@ -2096,9 +2116,9 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
     }
 
     // -------- DSL Compiler & Evaluator (Unified) --------
-  const DSG_OP = { CONST: 'CONST', LOAD: 'LOAD', ADD: 'ADD', SUB: 'SUB', MUL: 'MUL', DIV: 'DIV', MOD: 'MOD', NEG: 'NEG', SIN: 'SIN', COS: 'COS', ABS: 'ABS', CLAMP: 'CLAMP', SIGN: 'SIGN', END: 'END' };
-  // Added synthetic inputs: rev (angle/360 unwrapped), steps (evaluation counter), time (ms since script start)
-  const DSG_INPUTS = ['radius', 'angle', 'start', 'rev', 'steps', 'time'];
+    const DSG_OP = { CONST: 'CONST', LOAD: 'LOAD', ADD: 'ADD', SUB: 'SUB', MUL: 'MUL', DIV: 'DIV', MOD: 'MOD', NEG: 'NEG', SIN: 'SIN', COS: 'COS', ABS: 'ABS', CLAMP: 'CLAMP', SIGN: 'SIGN', END: 'END' };
+    // Added synthetic inputs: rev (angle/360 unwrapped), steps (evaluation counter), time (ms since script start)
+    const DSG_INPUTS = ['radius', 'angle', 'start', 'rev', 'steps', 'time'];
     const DSG_OUTPUTS = ['next_radius', 'next_angle', 'delta_radius', 'delta_angle'];
     const DSG_FUNCS = { sin: 1, cos: 1, abs: 1, clamp: 3, sign: 1 };
     const DSG_CONSTS = {};
@@ -2150,7 +2170,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
         while (peek() && peek().type === 'EOL') idx++;
         return output;
       }
-  function rpnToBytecode(rpn, definedLocals) { const bc = []; for (const tk of rpn) { if (!tk) continue; if (tk.type === 'NUMBER') { bc.push({ op: DSG_OP.CONST, v: tk.value }); continue; } if (tk.type === 'IDENT') { const nm = tk.value; if (DSG_CONSTS[nm] != null) { bc.push({ op: DSG_OP.CONST, v: DSG_CONSTS[nm] }); continue; } if (DSG_FUNCS[nm] != null) { switch (nm) { case 'sin': bc.push({ op: DSG_OP.SIN }); break; case 'cos': bc.push({ op: DSG_OP.COS }); break; case 'abs': bc.push({ op: DSG_OP.ABS }); break; case 'clamp': bc.push({ op: DSG_OP.CLAMP }); break; case 'sign': bc.push({ op: DSG_OP.SIGN }); break; } continue; } if (DSG_INPUTS.includes(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (DSG_OUTPUTS.includes(nm)) { if (!definedOutputs.has(nm)) { errors.push({ message: 'Output ' + nm + ' used before it is assigned earlier in script', pos: tk.pos }); } bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (definedLocals.has(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } errors.push({ message: 'Unknown identifier ' + nm, pos: tk.pos }); continue; } if (['+', '-', '*', '/', '%'].includes(tk.type)) { bc.push({ op: { '+': DSG_OP.ADD, '-': DSG_OP.SUB, '*': DSG_OP.MUL, '/': DSG_OP.DIV, '%': DSG_OP.MOD }[tk.type] }); continue; } if (tk.type === 'NEG') { bc.push({ op: DSG_OP.NEG }); continue; } } bc.push({ op: DSG_OP.END }); return bc; }
+      function rpnToBytecode(rpn, definedLocals) { const bc = []; for (const tk of rpn) { if (!tk) continue; if (tk.type === 'NUMBER') { bc.push({ op: DSG_OP.CONST, v: tk.value }); continue; } if (tk.type === 'IDENT') { const nm = tk.value; if (DSG_CONSTS[nm] != null) { bc.push({ op: DSG_OP.CONST, v: DSG_CONSTS[nm] }); continue; } if (DSG_FUNCS[nm] != null) { switch (nm) { case 'sin': bc.push({ op: DSG_OP.SIN }); break; case 'cos': bc.push({ op: DSG_OP.COS }); break; case 'abs': bc.push({ op: DSG_OP.ABS }); break; case 'clamp': bc.push({ op: DSG_OP.CLAMP }); break; case 'sign': bc.push({ op: DSG_OP.SIGN }); break; } continue; } if (DSG_INPUTS.includes(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (DSG_OUTPUTS.includes(nm)) { if (!definedOutputs.has(nm)) { errors.push({ message: 'Output ' + nm + ' used before it is assigned earlier in script', pos: tk.pos }); } bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (definedLocals.has(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } errors.push({ message: 'Unknown identifier ' + nm, pos: tk.pos }); continue; } if (['+', '-', '*', '/', '%'].includes(tk.type)) { bc.push({ op: { '+': DSG_OP.ADD, '-': DSG_OP.SUB, '*': DSG_OP.MUL, '/': DSG_OP.DIV, '%': DSG_OP.MOD }[tk.type] }); continue; } if (tk.type === 'NEG') { bc.push({ op: DSG_OP.NEG }); continue; } } bc.push({ op: DSG_OP.END }); return bc; }
       while (idx < tokens.length && !errors.length) {
         // skip stray EOLs
         while (peek() && peek().type === 'EOL') idx++;
@@ -2234,8 +2254,8 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
             if (!this.compiledScript) return current;
             const stepsPerRev = STEPS_PER_A_AXIS_REV;
             const degToSteps = stepsPerRev / 360;
-            const maxRadiusCm = this.scriptMaxRadius;
-            const stepsPerCm = MAX_R_STEPS / maxRadiusCm;
+            const stepsPerCm = this.deviceStepsPerCm;
+            const maxRadiusCm = (this.scriptMaxRadius != null) ? this.scriptMaxRadius : (this.maxRadiusSteps / stepsPerCm);
             const currentRadiusCm = current.radial / stepsPerCm;
             const currentAngleDeg = (current.angular / stepsPerRev) * 360;
             // Continuous rev tracking (unwrapped angle)
@@ -2273,7 +2293,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
             }
             outRadiusCm = Math.max(0, Math.min(maxRadiusCm, outRadiusCm));
             outAngleDeg = ((outAngleDeg % 360) + 360) % 360;
-            const radialSteps = Math.round(outRadiusCm * stepsPerCm);
+            const radialSteps = Math.max(0, Math.min(MAX_R_STEPS, Math.round(outRadiusCm * stepsPerCm)));
             const angleSteps = Math.round(outAngleDeg * degToSteps) % stepsPerRev;
             return { radial: radialSteps, angular: angleSteps };
           }

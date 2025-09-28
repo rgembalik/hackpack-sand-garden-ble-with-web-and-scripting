@@ -54,13 +54,13 @@ Useful values and limits for defining how the sand garden will behave. In most c
 #define STEPS_PER_MOTOR_REV 2048                     // Number of motor steps in one revolution of the output shaft of the motor.
 #define STEPS_PER_A_AXIS_REV 2 * STEPS_PER_MOTOR_REV // the number of steps required to move the angular axis one full revolution
 #define TRAVEL_PER_PINION_REV 50.267                 // Distance in mm the rack moves in one complete revolution of the pinion. (Informational only)
-#define STEPS_PER_MM 81.4849                         // Precomputed motor steps per mm of radial axis travel.
-#define MM_PER_STEP 1.0 / STEPS_PER_MM               // Millimeters of travel per motor step on radial axis. Evaluates to 0.01227 if STEPS_PER_REV is 2048.
-#define STEPS_PER_DEG (STEPS_PER_A_AXIS_REV) / 360   // Motor steps per degree of motion on angular axis. Should be about 11.378 steps per degree.
-#define STEPS_PER_RAD STEPS_PER_MOTOR_REV / PI       // Motor steps per radian of motion on angular axis. About 652.
+#define STEPS_PER_MM 70.0f                          // Calibrated motor steps per mm of radial travel (7000 steps span ≈ 10 cm).
+#define MM_PER_STEP (1.0f / STEPS_PER_MM)           // Millimeters of travel per motor step on radial axis (≈0.01429 mm with current mapping).
+#define STEPS_PER_DEG (STEPS_PER_A_AXIS_REV) / 360  // Motor steps per degree of motion on angular axis. Should be about 11.378 steps per degree.
+#define STEPS_PER_RAD STEPS_PER_MOTOR_REV / PI      // Motor steps per radian of motion on angular axis. About 652.
 
-#define ACTUAL_LEN_R_MM 87.967                           // Length in mm of the radial axis (hard limits). Derived from the CAD model of the hardware.
-#define ACTUAL_LEN_R_STEPS ACTUAL_LEN_R_MM *STEPS_PER_MM // Maximum possible length of radius in steps of motor (hard limits). Should be 7167 when 2048 steps per rev in motor.
+#define ACTUAL_LEN_R_MM 102.3857f                       // Effective radial travel (mm) including soft-stop margin for the 10 cm span.
+#define ACTUAL_LEN_R_STEPS ACTUAL_LEN_R_MM * STEPS_PER_MM // Maximum possible length of radius in motor steps. ≈7167 with current mapping.
 #define MAX_R_STEPS 7000                                 // Soft limit on how far the radius can move in terms of steps of the motor. This leaves a slight buffer on each end.
 // (Removed unused MAX_R_MM macro)
 
@@ -2722,7 +2722,7 @@ Positions pattern_AccidentalButterfly(Positions current, bool restartPattern)
 
 /*
 NOTES:
-  -the max distance the rack can travel is 87.967mm.
+  -the max distance the rack can travel is about 102.386mm (calibrated for the 10 cm working span plus buffer).
   -that's spread over 28 teeth of movement of the pinion.
   -that's 3.141678 mm per tooth. love how close that is to pi.
   -the pinion is 16 teeth.
@@ -2731,10 +2731,10 @@ NOTES:
   -there are 2048 steps per rev in the motor (may need to update with exact number).
   Note that this is an approximation since the gearbox on the motor is not an integer ratio.
   -4096 steps will drive the pinion one full revolution (so 4096 steps per 50.267mm)
-  -that makes 81.485 steps per mm of rack travel.
-  -or the inverse of that if needed: .01227 mm per step
-  -to fully move the rack across 87.967mm, need 7167.991 steps.
-  -round down to 7000 steps total, losing about 2mm of total travel, and use 1mm on each end
+  -that makes 70.0 steps per mm of rack travel.
+  -or the inverse of that if needed: 0.01429 mm per step
+  -to fully move the rack across ~102.386mm, need roughly 7167 steps.
+  -round down to 7000 steps total, losing about 2.4mm of total travel, and use about 1.2mm on each end
   as a soft buffer on the travel to prevent crashing.
 
 
