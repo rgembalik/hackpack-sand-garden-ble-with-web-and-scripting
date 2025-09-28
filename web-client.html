@@ -87,12 +87,26 @@
       inset: 0;
       mix-blend-mode: multiply;
       pointer-events: none;
+      z-index: 2;
     }
 
     .pattern-canvas {
       width: 100%;
       height: 100%;
       border-radius: 50%;
+      position: relative;
+      display: block;
+      z-index: 1;
+    }
+
+    .pattern-debug-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 3;
     }
   </style>
 </head>
@@ -184,11 +198,18 @@
                 class="w-20 bg-gray-800 border border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-sg-accent/50" />
             </div>
           </div>
-          <div class="flex items-center gap-4">
+          <div class="flex items-center gap-4 flex-wrap">
             <label class="inline-flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" x-model="autoMode" @change="sendMode()"
                 class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
               <span class="text-sm">Automatic Mode</span>
+            </label>
+            <label class="inline-flex items-center gap-2 cursor-pointer select-none"
+              :class="!connected ? 'opacity-50' : ''">
+              <input type="checkbox" :checked="debugStepsEnabled" :disabled="!connected"
+                @change="onDebugToggle($event)"
+                class="rounded bg-gray-800 border-gray-600 text-sg-accent focus:ring-sg-accent/60" />
+              <span class="text-sm">Device Debug Stream</span>
             </label>
             <!-- Show Trails option removed (always on) -->
           </div>
@@ -261,16 +282,20 @@
               <div class="sg-screw" style="right:-12px; top:50%; transform:translateY(-50%);"></div>
               <div class="sand-tray shadow-sand" x-ref="tray">
                 <canvas x-ref="canvas" class="pattern-canvas"></canvas>
+                <canvas x-ref="debugCanvas" class="pattern-debug-canvas"></canvas>
                 <div class="tray-overlay rounded-full pointer-events-none"></div>
               </div>
             </div>
             <div class="mt-4 flex flex-wrap gap-3 text-xs">
               <button @click="regeneratePattern()"
                 class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600">Regenerate</button>
-              <button @click="toggleSimulation()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600"
+              <button @click="toggleSimulation()" :disabled="debugStepsEnabled"
+                :class="'px-3 py-1.5 rounded ' + (debugStepsEnabled ? 'bg-gray-700/60 cursor-not-allowed opacity-50' : 'bg-gray-700 hover:bg-gray-600')"
                 x-text="simulationRunning ? 'Pause' : 'Play'"></button>
-              <button @click="stepOnce()" :disabled="simulationRunning || points.length<2" :class="(simulationRunning||points.length<2)?'opacity-40 cursor-not-allowed':'hover:bg-gray-600'" class="px-3 py-1.5 rounded bg-gray-700 text-white">Step</button>
-              <button @click="exportImage()" class="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600">Export</button>
+              <button @click="stepOnce()" :disabled="debugStepsEnabled || simulationRunning || points.length<2"
+                :class="(debugStepsEnabled || simulationRunning || points.length<2)?'px-3 py-1.5 rounded bg-gray-700/60 text-white opacity-50 cursor-not-allowed':'px-3 py-1.5 rounded bg-gray-700 text-white hover:bg-gray-600'">Step</button>
+              <button @click="exportImage()"
+                :class="'px-3 py-1.5 rounded ' + (debugStepsEnabled ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-700 hover:bg-gray-600')">Export</button>
               <!-- Show Trails checkbox removed: trails now always enabled -->
             </div>
           </div>
@@ -317,15 +342,27 @@
               <textarea x-model="scriptSource"
                 class="w-full h-56 font-mono text-sm bg-gray-900/70 border border-gray-600 rounded p-2 focus:outline-none focus:ring-2 focus:ring-sg-accent/50 resize-y"
                 spellcheck="false"></textarea>
-              <div class="flex flex-col gap-2 w-44">
+              <div class="flex flex-col gap-2 w-52">
                 <button @click="compileScript()"
                   class="px-3 py-2 rounded bg-sg-accent hover:bg-sg-accent/80 text-sm font-medium">Compile</button>
-                <button @click="simulateScript()" :disabled="!compiledScript"
-                  :class="!compiledScript ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-600'"
+                <button @click="simulateScript()" :disabled="!compiledScript || debugStepsEnabled"
+                  :class="(!compiledScript || debugStepsEnabled) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-600'"
                   class="px-3 py-2 rounded bg-gray-700 text-sm font-medium">Simulate</button>
-                <button @click="useScriptPattern()" :disabled="!compiledScript"
-                  :class="!compiledScript ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-600'"
-                  class="px-3 py-2 rounded bg-gray-700 text-sm font-medium">Use Live</button>
+                <button @click="uploadScriptToDevice()"
+                  :disabled="!compiledScript || !connected || scriptUploadInProgress"
+                  :class="(!compiledScript || !connected || scriptUploadInProgress) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-sg-accent/90'"
+                  class="px-3 py-2 rounded bg-sg-accent text-sm font-medium flex items-center justify-center gap-2">
+                  <span x-text="scriptUploadInProgress ? 'Uploading…' : 'Send to Device'"></span>
+                  <span x-show="scriptUploadInProgress" class="text-xs" x-text="scriptUploadProgress + '%'" ></span>
+                </button>
+                <label class="text-xs text-gray-300 flex flex-col gap-1">
+                  Target slot (optional)
+                  <input type="number" min="1" step="1" x-model="scriptTargetSlot"
+                    placeholder="auto"
+                    class="bg-gray-900/70 border border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-sg-accent/50" />
+                </label>
+                <div class="text-xs text-gray-400 min-h-[1.5rem]" x-show="scriptUploadStatus"
+                  x-text="scriptUploadStatus"></div>
               </div>
             </div>
             <div class="flex items-center gap-4 text-xs flex-wrap">
@@ -394,6 +431,61 @@
                     <p class="italic text-gray-500">(no locals)</p>
                   </template>
                 </div>
+                <div class="sm:col-span-2 border-t border-gray-800 pt-3">
+                  <div class="flex flex-wrap items-center gap-3 mb-2">
+                    <h4 class="font-semibold text-sg-accent">Device Step Telemetry</h4>
+                    <span class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded bg-gray-800/70 border border-gray-700/70"
+                      :class="debugStepsEnabled ? 'text-emerald-300 border-emerald-500/40' : 'text-gray-400'">
+                      Stream: <span x-text="debugStepsEnabled ? 'On' : 'Off'"></span>
+                    </span>
+                    <span class="text-[10px] px-2 py-0.5 rounded bg-gray-800/70 text-gray-300 border border-gray-700/70">
+                      Steps: <span x-text="debugPoints.length"></span>
+                    </span>
+                  </div>
+                  <template x-if="lastDebugStep">
+                    <div class="grid sm:grid-cols-2 gap-3 font-mono text-[11px] leading-relaxed">
+                      <ul class="space-y-0.5">
+                        <li>Index: <span x-text="lastDebugStep.idx"></span></li>
+                        <li>Actual steps (r / a): <span
+                            x-text="lastDebugStep.radialSteps + ' / ' + lastDebugStep.angularSteps"></span></li>
+                        <li>Actual radius (mm): <span x-text="fmtNum(lastDebugStep.radiusMm)"></span></li>
+                        <li>Actual angle (°): <span x-text="fmtNum(lastDebugStep.angleDeg)"></span></li>
+                        <li>XY (mm): <span
+                            x-text="fmtNum(lastDebugStep.xMm) + ', ' + fmtNum(lastDebugStep.yMm)"></span></li>
+                        <li>Received: <span x-text="formatClock(lastDebugStep.receivedAt)"></span></li>
+                      </ul>
+                      <ul class="space-y-0.5">
+            <li x-show="lastDebugStep.plannedRadial != null" :class="lastDebugStep.mismatchRadial ? 'text-red-400' : ''">Planned steps (r / a): <span
+                            x-text="lastDebugStep.plannedRadial + ' / ' + lastDebugStep.plannedAngular"></span></li>
+            <li x-show="lastDebugStep.simulatedRadialSteps != null">Sim steps (r / a): <span
+              x-text="lastDebugStep.simulatedRadialSteps + ' / ' + lastDebugStep.simulatedAngularSteps"></span></li>
+            <li x-show="lastDebugStep.plannedRadiusMm != null" :class="lastDebugStep.mismatchRadial ? 'text-red-400' : ''">Planned radius (mm): <span
+              x-text="fmtNum(lastDebugStep.plannedRadiusMm)"></span></li>
+            <li x-show="lastDebugStep.simulatedRadiusMm != null">Sim radius (mm): <span
+              x-text="fmtNum(lastDebugStep.simulatedRadiusMm)"></span></li>
+            <li x-show="lastDebugStep.plannedAngleDeg != null" :class="lastDebugStep.mismatchAngular ? 'text-red-400' : ''">Planned angle (°): <span
+              x-text="fmtNum(lastDebugStep.plannedAngleDeg)"></span></li>
+            <li x-show="lastDebugStep.simulatedAngleDeg != null">Sim angle (°): <span
+              x-text="fmtNum(lastDebugStep.simulatedAngleDeg)"></span></li>
+            <li x-show="lastDebugStep.simulationError" class="text-red-300">Sim error: <span
+              x-text="lastDebugStep.simulationError"></span></li>
+                        <li x-show="lastDebugStep.deltaRadialSteps != null">Δ steps (r / a): <span
+                            x-text="lastDebugStep.deltaRadialSteps + ' / ' + lastDebugStep.deltaAngularSteps"></span></li>
+                        <li x-show="lastDebugStep.deltaRadiusMm != null">Δ radius (mm): <span
+                            x-text="fmtNum(lastDebugStep.deltaRadiusMm)"></span></li>
+                        <li>Pattern / Mode / Run: <span
+                            x-text="(lastDebugStep.pattern != null ? lastDebugStep.pattern : '-') + ' • ' + (lastDebugStep.auto ? 'Auto' : 'Manual') + ' • ' + (lastDebugStep.running ? 'Running' : 'Stopped')"></span>
+                        </li>
+                        <li>Start: <span x-text="lastDebugStep.start ? 'Yes' : 'No'"></span><span x-show="lastDebugStep.tag"
+                            class="ml-2">Tag: <span x-text="lastDebugStep.tag"></span></span></li>
+                      </ul>
+                    </div>
+                  </template>
+                  <template x-if="!lastDebugStep">
+                    <p class="italic text-gray-500">No step telemetry yet. Enable Device Debug Stream to view
+                      live data.</p>
+                  </template>
+                </div>
               </div>
             </div>
         </section>
@@ -420,8 +512,22 @@
   // Trails always enabled now (formerly showTrails toggle removed)
         statusMessage: 'Idle',
         logs: [],
-        device: null, server: null,
-        chars: { speed: null, pattern: null, status: null, mode: null, run: null, telemetry: null },
+  device: null, server: null,
+  chars: { speed: null, pattern: null, status: null, mode: null, run: null, telemetry: null, command: null, script: null },
+    debugStepsEnabled: false,
+    debugCanvas: null,
+    debugCtx: null,
+    debugPoints: [],
+    debugMaxPoints: 8000,
+    deviceSimToleranceSteps: 2,
+    deviceStepsPerMm: 81.4849,
+    deviceStepsPerCm: 81.4849 * 10,
+    debugLastCanvasPoint: null,
+    debugSimulationPoints: [],
+    lastDebugStep: null,
+    maxRadiusSteps: 7000,
+    stepsPerARev: 2 * 2048,
+    trayRadiusFactor: 0.48,
         // Telemetry state
         joy: { a: 0, r: 0, mag: 0 }, lastState: { pat: null, auto: null, run: null, brt: null }, heartbeatCount: 0,
         patternMeta: [
@@ -438,6 +544,7 @@
           { id: 10, type: 'builtin', name: 'Accidental Butterfly', short: 'butterfly', description: 'Sinusoidally modulated spiral (butterfly).', pointsTarget: 4600 },
           { id: 11, type: 'sandscript', name: 'Sandscript', short: 'script', description: 'Your custom Sandscript.', pointsTarget: 2000 }
         ],
+        scriptPatternId: 11,
   // Sandscript state (internal variables still prefixed dsl for now)
   scriptSource: `# simple back and forth with the ball, no easing at the edge
 
@@ -455,7 +562,7 @@ delta_radius = 1 * dir`,
         // showBytecode removed
         autoRecompile: true,
         autoSimulate: true,
-        exampleScripts: [
+  exampleScripts: [
           { final: true, name: 'PingPongSharpPetals', code: `# simple back and forth with the ball,
 # no easing at the edge
 
@@ -507,7 +614,22 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
   dslInputsSeq: [],
   dslOutputsSeq: [],
   dslLocalsSeq: [],
+        scriptUploadInProgress: false,
+        scriptUploadProgress: 0,
+        scriptUploadStatus: '',
+        scriptTargetSlot: '',
+        maxScriptBytes: 512,
+  preferredScriptChunkSize: null,
+  scriptWriteModePreference: 'withResponse',
         fmtNum(n) { if (n == null || !isFinite(n)) return '-'; return (Math.abs(n) < 0.001 ? n.toExponential(2) : n.toFixed(3)).replace(/\.0+$/, '').replace(/(\.[0-9]*?)0+$/, '$1'); },
+        formatClock(ts) {
+          if (!ts) return '-';
+          try {
+            return new Date(ts).toLocaleTimeString();
+          } catch (_) {
+            return '-';
+          }
+        },
         // Drawing
         canvas: null, ctx: null, traySize: 0, points: [],
         // Ball & trench visualization (direct stamping; no offscreen accumulation)
@@ -526,6 +648,10 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
         init() {
           this.canvas = this.$refs.canvas;
           this.ctx = this.canvas.getContext('2d');
+          this.debugCanvas = this.$refs.debugCanvas || null;
+          if (this.debugCanvas) {
+            this.debugCtx = this.debugCanvas.getContext('2d');
+          }
           this.resizeCanvas();
           window.addEventListener('resize', () => this.resizeCanvas());
           // Auto-pause when tab hidden (will implement logic in onVisibilityChange)
@@ -559,9 +685,20 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
           const rect = this.$refs.tray.getBoundingClientRect();
           const size = Math.min(rect.width, rect.height);
           this.canvas.width = size; this.canvas.height = size; this.traySize = size;
+          if (this.debugCanvas) {
+            this.debugCanvas.width = size;
+            this.debugCanvas.height = size;
+          }
           this.ensurePathBuffer();
           this.clearPath();
           this.renderFrame();
+          if (this.debugCtx) {
+            if (this.debugPoints.length) {
+              this.redrawDebugTrail();
+            } else {
+              this.debugCtx.clearRect(0, 0, size, size);
+            }
+          }
         },
         log(msg) {
           const t = new Date().toLocaleTimeString();
@@ -584,6 +721,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
           const RUN_UUID = '9b6c7e15-3b2c-4d8c-9d7c-5e2a6d1f8b01';
           const TELEMETRY_UUID = '9b6c7e16-3b2c-4d8c-9d7c-5e2a6d1f8b01';
           const COMMAND_UUID = '9b6c7e17-3b2c-4d8c-9d7c-5e2a6d1f8b01';
+          const SCRIPT_UUID = '9b6c7e18-3b2c-4d8c-9d7c-5e2a6d1f8b01';
           try {
             this.device = await navigator.bluetooth.requestDevice({
               filters: [{ services: [SERVICE_UUID] }],
@@ -598,11 +736,13 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
             const patternChar = await service.getCharacteristic(PATTERN_UUID);
             const statusChar = await service.getCharacteristic(STATUS_UUID);
             // Mode/run are optional until firmware updated; wrap in try
-            let modeChar = null, runChar = null, telemetryChar = null;
+            let modeChar = null, runChar = null, telemetryChar = null, commandChar = null, scriptChar = null;
             try { modeChar = await service.getCharacteristic(MODE_UUID); } catch (_) { }
             try { runChar = await service.getCharacteristic(RUN_UUID); } catch (_) { }
             try { telemetryChar = await service.getCharacteristic(TELEMETRY_UUID); } catch (_) { this.log('Telemetry characteristic not found (firmware older?)'); }
-            this.chars = { speed: speedChar, pattern: patternChar, status: statusChar, mode: modeChar, run: runChar, telemetry: telemetryChar };
+            try { commandChar = await service.getCharacteristic(COMMAND_UUID); } catch (_) { this.log('Command characteristic not found'); }
+            try { scriptChar = await service.getCharacteristic(SCRIPT_UUID); } catch (_) { this.log('SandScript characteristic not found'); }
+            this.chars = { speed: speedChar, pattern: patternChar, status: statusChar, mode: modeChar, run: runChar, telemetry: telemetryChar, command: commandChar, script: scriptChar };
             // Initial reads
             await this.readInitialValues();
             // Notifications
@@ -626,6 +766,9 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
                 telemetryChar.addEventListener('characteristicvaluechanged', e => { this.handleTelemetryNotify(e); });
               }).catch(() => { })
             ]);
+            this.debugStepsEnabled = false;
+            this.clearDebugTrail();
+            this.lastDebugStep = null;
             this.connected = true; this.setStatus('Connected');
             this.log('BLE ready.');
           } catch (err) {
@@ -661,12 +804,29 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
         // Notification handlers
         handleSpeedNotify(e) { const txt = this.textFromDV(e.target.value); const num = parseFloat(txt); if (!isNaN(num)) { this.speedMultiplier = num; this.log('Speed->' + num.toFixed(3)); } },
         handlePatternNotify(e) { const txt = this.textFromDV(e.target.value); const num = parseInt(txt); if (!isNaN(num)) { this.pattern = num; this.regeneratePattern(); this.log('Pattern->' + num); } },
-        handleStatusNotify(e) { const txt = this.textFromDV(e.target.value); this.setStatus(txt); },
+        handleStatusNotify(e) {
+          const txt = this.textFromDV(e.target.value);
+          if (txt.startsWith('[DEBUG] STEPS')) {
+            if (!txt.includes('ERR')) {
+              const modeMatch = txt.match(/\b(ON|OFF)\b/i);
+              if (modeMatch) {
+                const enable = modeMatch[1].toUpperCase() === 'ON';
+                if (enable && !this.debugStepsEnabled) {
+                  this.clearDebugTrail();
+                }
+                this.debugStepsEnabled = enable;
+              }
+            } else {
+              this.debugStepsEnabled = false;
+            }
+          }
+          this.setStatus(txt);
+        },
         handleModeNotify(e) { const txt = this.textFromDV(e.target.value); const num = parseInt(txt); this.autoMode = (num === 1); this.log('Mode->' + (this.autoMode ? 'Auto' : 'Manual')); },
         handleRunNotify(e) { const txt = this.textFromDV(e.target.value); const num = parseInt(txt); this.running = (num === 1); this.log('Run->' + (this.running ? 'Running' : 'Stopped')); },
         handleTelemetryNotify(e) {
           const txt = this.textFromDV(e.target.value);
-          // Expect lines like: JOY a=12 r=-3 mag=12 | STATE pat=1 auto=1 run=1 brt=40 | HB
+          // Expect lines like: JOY a=12 r=-3 mag=12 | STATE pat=1 auto=1 run=1 brt=40 | STEP idx=... | HB
           if (txt.startsWith('JOY ')) {
             const parts = Object.fromEntries(txt.substring(4).split(/\s+/).map(kv => kv.split('=')));
             const a = parseInt(parts.a) || 0; const r = parseInt(parts.r) || 0; const mag = parseInt(parts.mag) || Math.max(Math.abs(a), Math.abs(r));
@@ -680,11 +840,469 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
             if (!isNaN(pat) && pat !== this.pattern) this.pattern = pat;
             if (typeof auto === 'boolean' && auto !== this.autoMode) this.autoMode = auto;
             if (typeof run === 'boolean' && run !== this.running) this.running = run;
+          } else if (txt.startsWith('STEP ')) {
+            this.handleStepTelemetry(txt);
           } else if (txt === 'HB') {
             this.heartbeatCount++; this.log('HB ' + this.heartbeatCount);
           } else {
             this.log('TL ' + txt);
           }
+        },
+        handleStepTelemetry(line) {
+          const payload = line.length > 5 ? line.substring(5) : '';
+          const kv = this.parseTelemetryKV(payload);
+          const toInt = v => {
+            if (v == null) return null;
+            const n = Number.parseInt(v, 10);
+            return Number.isFinite(n) ? n : null;
+          };
+          const toFloat = v => {
+            if (v == null) return null;
+            const n = Number.parseFloat(v);
+            return Number.isFinite(n) ? n : null;
+          };
+
+          const actualR = toInt(kv.cr ?? kv.r ?? kv.radial ?? kv.rs);
+          const actualA = toInt(kv.ca ?? kv.a ?? kv.angular ?? kv.as);
+          if (actualR == null || actualA == null) {
+            return;
+          }
+
+          const plannedR = toInt(kv.tr ?? kv.pr ?? kv.planR);
+          const plannedA = toInt(kv.ta ?? kv.pa ?? kv.planA);
+          const idxRaw = toInt(kv.idx);
+          const idx = idxRaw != null ? idxRaw : (this.debugPoints.length ? this.debugPoints[this.debugPoints.length - 1].idx + 1 : 1);
+          const restartFlag = kv.start === '1' || kv.start === 'true' || kv.start === 'yes';
+          const patternId = toInt(kv.pat);
+          const autoFlag = kv.auto == null ? null : (kv.auto === '1' || kv.auto.toLowerCase?.() === 'true');
+          const runFlag = kv.run == null ? null : (kv.run === '1' || kv.run.toLowerCase?.() === 'true');
+
+          if (restartFlag && this.debugPoints.length) {
+            this.clearDebugTrail();
+          }
+
+          const mmPerStep = (this.maxRadiusSteps > 0) ? ((this.scriptMaxRadius * 10) / this.maxRadiusSteps) : 0;
+          let radiusMm = toFloat(kv.mm ?? kv.rm);
+          if (radiusMm == null) {
+            radiusMm = mmPerStep ? actualR * mmPerStep : null;
+          }
+          let angleDeg = toFloat(kv.deg ?? kv.ad);
+          if (angleDeg == null) {
+            angleDeg = (this.stepsPerARev > 0) ? (actualA / this.stepsPerARev) * 360 : null;
+          }
+          let xMm = toFloat(kv.x);
+          let yMm = toFloat(kv.y);
+          if ((xMm == null || yMm == null) && radiusMm != null && angleDeg != null) {
+            const thetaRad = angleDeg * Math.PI / 180;
+            xMm = radiusMm * Math.cos(thetaRad);
+            yMm = radiusMm * Math.sin(thetaRad);
+          }
+
+          const plannedRadiusMm = (plannedR != null && mmPerStep) ? plannedR * mmPerStep : null;
+          const plannedAngleDeg = (plannedA != null && this.stepsPerARev > 0) ? (plannedA / this.stepsPerARev) * 360 : null;
+          const deltaRadialSteps = (plannedR != null) ? actualR - plannedR : null;
+          const deltaAngularSteps = (plannedA != null) ? actualA - plannedA : null;
+          const deltaRadiusMm = (deltaRadialSteps != null && mmPerStep) ? deltaRadialSteps * mmPerStep : null;
+
+          const dslRadiusCm = toFloat(kv.dslrcm);
+          const dslAngleDeg = toFloat(kv.dsladeg);
+          const dslRev = toFloat(kv.dslrev);
+          const dslSteps = toInt(kv.dslsteps);
+          const dslTime = toInt(kv.dsltime);
+          let dslStartFlag = null;
+          if (kv.dslstart != null) {
+            const raw = String(kv.dslstart).toLowerCase();
+            dslStartFlag = (raw === '1' || raw === 'true' || raw === 'yes');
+          }
+
+          const entry = {
+            idx,
+            radialSteps: actualR,
+            angularSteps: actualA,
+            plannedRadial: plannedR,
+            plannedAngular: plannedA,
+            radiusMm,
+            angleDeg,
+            xMm,
+            yMm,
+            start: restartFlag,
+            pattern: patternId,
+            auto: autoFlag,
+            running: runFlag,
+            tag: kv.tag || null,
+            timestamp: (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(),
+            receivedAt: Date.now(),
+            plannedRadiusMm,
+            plannedAngleDeg,
+            deltaRadialSteps,
+            deltaAngularSteps,
+            deltaRadiusMm,
+            mmPerStep,
+            displayRadialSteps: plannedR != null ? plannedR : actualR,
+            displayAngularSteps: plannedA != null ? plannedA : actualA,
+            dslInputs: (dslRadiusCm != null || dslAngleDeg != null || dslRev != null || dslSteps != null || dslTime != null || dslStartFlag != null) ? {
+              radiusCm: dslRadiusCm,
+              angleDeg: dslAngleDeg,
+              rev: dslRev,
+              steps: dslSteps,
+              timeMs: dslTime,
+              start: dslStartFlag
+            } : null
+          };
+
+          if (!this.debugStepsEnabled) {
+            this.debugStepsEnabled = true;
+          }
+
+          this.processDeviceScriptDebug(entry);
+          this.pushDebugPoint(entry);
+          this.lastDebugStep = entry;
+
+          if (patternId != null && !Number.isNaN(patternId) && patternId !== this.pattern) {
+            this.pattern = patternId;
+          }
+          if (autoFlag != null && autoFlag !== this.autoMode) {
+            this.autoMode = autoFlag;
+          }
+          if (runFlag != null && runFlag !== this.running) {
+            this.running = runFlag;
+          }
+          this.lastState = {
+            pat: patternId != null ? patternId : (this.lastState?.pat ?? null),
+            auto: autoFlag != null ? autoFlag : (this.lastState?.auto ?? null),
+            run: runFlag != null ? runFlag : (this.lastState?.run ?? null),
+            brt: this.lastState?.brt ?? null
+          };
+        },
+        parseTelemetryKV(payload) {
+          if (!payload || typeof payload !== 'string') return {};
+          const out = {};
+          const tokens = payload.trim().split(/\s+/);
+          for (const token of tokens) {
+            if (!token) continue;
+            const eq = token.indexOf('=');
+            if (eq === -1) {
+              out[token] = true;
+            } else {
+              const key = token.substring(0, eq);
+              const value = token.substring(eq + 1);
+              out[key] = value;
+            }
+          }
+          return out;
+        },
+        pushDebugPoint(entry) {
+          this.debugPoints.push(entry);
+          if (this.debugPoints.length > this.debugMaxPoints) {
+            const excess = this.debugPoints.length - this.debugMaxPoints;
+            this.debugPoints.splice(0, excess);
+          }
+          if (this.debugCtx && this.debugCanvas) {
+            this.redrawDebugTrail();
+          }
+        },
+        redrawDebugTrail() {
+          if (!this.debugCtx || !this.debugCanvas) return;
+          const ctx = this.debugCtx;
+          const width = this.debugCanvas.width;
+          const height = this.debugCanvas.height;
+          ctx.clearRect(0, 0, width, height);
+          this.debugLastCanvasPoint = null;
+
+          if (!this.debugPoints.length) {
+            return;
+          }
+
+          if (this.debugPoints.length) {
+            ctx.save();
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = 'rgba(255, 122, 0, 0.85)';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            let segmentOpen = false;
+            for (const entry of this.debugPoints) {
+              const radialSteps = Number.isFinite(entry.displayRadialSteps) ? entry.displayRadialSteps : entry.radialSteps;
+              const angularSteps = Number.isFinite(entry.displayAngularSteps) ? entry.displayAngularSteps : entry.angularSteps;
+              const pt = this.stepsToCanvas(radialSteps, angularSteps);
+              if (!pt) continue;
+              if (entry.start || !segmentOpen) {
+                ctx.moveTo(pt.x, pt.y);
+                segmentOpen = true;
+              } else {
+                ctx.lineTo(pt.x, pt.y);
+              }
+              this.debugLastCanvasPoint = pt;
+            }
+            ctx.stroke();
+            ctx.restore();
+
+            // mark restarts
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+            for (const entry of this.debugPoints) {
+              if (!entry.start) continue;
+              const radialSteps = Number.isFinite(entry.displayRadialSteps) ? entry.displayRadialSteps : entry.radialSteps;
+              const angularSteps = Number.isFinite(entry.displayAngularSteps) ? entry.displayAngularSteps : entry.angularSteps;
+              const pt = this.stepsToCanvas(radialSteps, angularSteps);
+              if (!pt) continue;
+              ctx.beginPath();
+              ctx.arc(pt.x, pt.y, 2.1, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+
+            // highlight latest point
+            const last = this.debugPoints[this.debugPoints.length - 1];
+            if (last) {
+              const radialSteps = Number.isFinite(last.displayRadialSteps) ? last.displayRadialSteps : last.radialSteps;
+              const angularSteps = Number.isFinite(last.displayAngularSteps) ? last.displayAngularSteps : last.angularSteps;
+              const head = this.stepsToCanvas(radialSteps, angularSteps);
+              if (head) {
+                ctx.save();
+                const color = last.mismatchRadial || last.mismatchAngular ? 'rgba(255, 80, 80, 0.95)' : 'rgba(255, 255, 255, 0.92)';
+                ctx.fillStyle = color;
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.55)';
+                ctx.shadowBlur = 6;
+                ctx.beginPath();
+                ctx.arc(head.x, head.y, 3.2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                this.debugLastCanvasPoint = head;
+              }
+            }
+          }
+        },
+        processDeviceScriptDebug(entry) {
+          if (!this.debugStepsEnabled) return;
+          if (!entry || entry.pattern !== this.scriptPatternId) return;
+          if (!entry.dslInputs || !this.compiledScript) return;
+
+          const inputs = entry.dslInputs;
+          const hasFinite = v => v != null && isFinite(v);
+          if (!hasFinite(inputs.radiusCm) || !hasFinite(inputs.angleDeg)) {
+            return;
+          }
+
+          const vars = {
+            radius: inputs.radiusCm,
+            angle: inputs.angleDeg,
+            start: inputs.start === true ? 1 : 0,
+            rev: hasFinite(inputs.rev) ? inputs.rev : 0,
+            steps: hasFinite(inputs.steps) ? inputs.steps : 0,
+            time: hasFinite(inputs.timeMs) ? inputs.timeMs : 0
+          };
+
+          let evalResult;
+          try {
+            evalResult = evalDSLCompiled(this.compiledScript, vars, true);
+          } catch (err) {
+            entry.simulationError = err && err.message ? err.message : String(err);
+            return;
+          }
+
+          const outputs = evalResult?.outputs || {};
+          const locals = evalResult?.locals || {};
+          const stepsPerCm = this.deviceStepsPerCm;
+          const stepsPerRev = this.stepsPerARev;
+          const maxRadiusCm = this.maxRadiusSteps / stepsPerCm;
+          const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+
+          let outRadiusCm = vars.radius;
+          if (hasFinite(outputs.next_radius)) outRadiusCm = outputs.next_radius;
+          else if (hasFinite(outputs.delta_radius)) outRadiusCm = vars.radius + outputs.delta_radius;
+
+          let outAngleDeg = vars.angle;
+          if (hasFinite(outputs.next_angle)) outAngleDeg = outputs.next_angle;
+          else if (hasFinite(outputs.delta_angle)) outAngleDeg = vars.angle + outputs.delta_angle;
+
+          outRadiusCm = clamp(outRadiusCm, 0, maxRadiusCm);
+          outAngleDeg = ((outAngleDeg % 360) + 360) % 360;
+
+          const radialSteps = Math.round(outRadiusCm * stepsPerCm);
+          let angularSteps = Math.round((outAngleDeg / 360) * stepsPerRev);
+          if (stepsPerRev > 0) {
+            angularSteps = ((angularSteps % stepsPerRev) + stepsPerRev) % stepsPerRev;
+          }
+
+          const mmPerStepDevice = this.deviceStepsPerMm > 0 ? (1 / this.deviceStepsPerMm) : 0;
+          const simulatedRadiusMm = mmPerStepDevice ? radialSteps * mmPerStepDevice : null;
+
+          entry.simulatedRadialSteps = radialSteps;
+          entry.simulatedAngularSteps = angularSteps;
+          entry.simulatedRadiusMm = simulatedRadiusMm;
+          entry.simulatedAngleDeg = outAngleDeg;
+          entry.simulationError = null;
+
+          const tolerance = this.deviceSimToleranceSteps;
+          if (hasFinite(entry.plannedRadial)) {
+            const diffR = Math.abs(radialSteps - entry.plannedRadial);
+            entry.mismatchRadial = diffR > tolerance;
+          } else {
+            entry.mismatchRadial = false;
+          }
+          if (hasFinite(entry.plannedAngular)) {
+            let diffA = Math.abs(angularSteps - entry.plannedAngular);
+            if (stepsPerRev > 0) {
+              diffA = diffA % stepsPerRev;
+              diffA = Math.min(diffA, stepsPerRev - diffA);
+            }
+            entry.mismatchAngular = diffA > tolerance;
+          } else {
+            entry.mismatchAngular = false;
+          }
+          this.appendDebugSimulationPoint(entry);
+          this.lastDSLInputs = { ...vars };
+          this.lastDSLOutputs = { ...outputs };
+          this.lastDSLLocals = { ...locals };
+
+          if (Array.isArray(this.dslInputsSeq)) {
+            this.dslInputsSeq.push({ ...vars });
+            if (this.dslInputsSeq.length > this.debugMaxPoints) this.dslInputsSeq.shift();
+          }
+          if (Array.isArray(this.dslOutputsSeq)) {
+            this.dslOutputsSeq.push({ ...outputs });
+            if (this.dslOutputsSeq.length > this.debugMaxPoints) this.dslOutputsSeq.shift();
+          }
+          if (Array.isArray(this.dslLocalsSeq)) {
+            this.dslLocalsSeq.push({ ...locals });
+            if (this.dslLocalsSeq.length > this.debugMaxPoints) this.dslLocalsSeq.shift();
+          }
+        },
+        stepsToCanvas(rSteps, aSteps) {
+          if (!this.canvas || !Number.isFinite(rSteps) || !Number.isFinite(aSteps)) return null;
+          const radiusLimit = this.maxRadiusSteps > 0 ? this.maxRadiusSteps : 1;
+          const trayRadius = this.canvas.width * this.trayRadiusFactor;
+          const clampedR = Math.max(0, Math.min(radiusLimit, rSteps));
+          const norm = clampedR / radiusLimit;
+          const radiusPx = norm * trayRadius;
+          const theta = (aSteps / this.stepsPerARev) * Math.PI * 2;
+          const cx = this.canvas.width / 2;
+          const cy = this.canvas.height / 2;
+          return { x: cx + radiusPx * Math.cos(theta), y: cy + radiusPx * Math.sin(theta) };
+        },
+        drawTrenchStamp(x, y) {
+          if (!this.ctx) return;
+          const ctx = this.ctx;
+          const innerR = this.ballRadiusPx * 0.2;
+          const outerR = this.ballRadiusPx + this.trenchSoftness;
+          const g = ctx.createRadialGradient(x, y, innerR, x, y, outerR);
+          g.addColorStop(0.0, 'rgba(255,255,255,0.55)');
+          g.addColorStop(0.28, 'rgba(245,245,245,0.38)');
+          g.addColorStop(0.55, 'rgba(230,230,230,0.22)');
+          g.addColorStop(0.75, 'rgba(200,200,200,0.15)');
+          g.addColorStop(0.90, 'rgba(180,180,180,0.10)');
+          g.addColorStop(1.0, 'rgba(150,150,150,0)');
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(x, y, outerR, 0, Math.PI * 2);
+          ctx.fill();
+        },
+        drawTrenchSegment(x0, y0, x1, y1) {
+          if (!this.ctx) return;
+          if (!Number.isFinite(x0) || !Number.isFinite(y0)) {
+            this.drawTrenchStamp(x1, y1);
+            return;
+          }
+          const spacing = this.ballRadiusPx * this.trenchStampSpacingFactor;
+          const dx = x1 - x0;
+          const dy = y1 - y0;
+          const dist = Math.hypot(dx, dy);
+          if (dist === 0) {
+            this.drawTrenchStamp(x1, y1);
+            return;
+          }
+          const steps = Math.max(1, Math.floor(dist / spacing));
+          for (let i = 0; i <= steps; i++) {
+            const f = i / steps;
+            const sx = x0 + dx * f;
+            const sy = y0 + dy * f;
+            this.drawTrenchStamp(sx, sy);
+          }
+        },
+        drawBallAt(x, y) {
+          if (!this.ctx) return;
+          const ctx = this.ctx;
+          const ballR = this.ballRadiusPx;
+          // Soft glow under ball
+          const glow = ctx.createRadialGradient(x, y, ballR * 0.2, x, y, ballR * 1.3);
+          glow.addColorStop(0, 'rgba(255,255,255,0.55)');
+          glow.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(x, y, ballR * 1.3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          const grad = ctx.createRadialGradient(x - ballR * 0.4, y - ballR * 0.4, ballR * 0.2, x, y, ballR);
+          grad.addColorStop(0, '#eeeeee');
+          grad.addColorStop(0.45, '#d9d9d9');
+          grad.addColorStop(1, '#b5b5b5');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(x, y, ballR, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = 'rgba(255,255,255,0.75)';
+          ctx.beginPath();
+          ctx.arc(x - ballR * 0.35, y - ballR * 0.35, ballR * 0.3, 0, Math.PI * 2);
+          ctx.fill();
+
+          const pad = Math.ceil(ballR * 1.4);
+          const bx = Math.max(0, x - pad);
+          const by = Math.max(0, y - pad);
+          const bw = Math.min(this.canvas.width - bx, pad * 2);
+          const bh = Math.min(this.canvas.height - by, pad * 2);
+          try {
+            this.ballPrevImage = ctx.getImageData(bx, by, bw, bh);
+            this.ballPrevBox = { x: bx, y: by };
+          } catch (_) {
+            this.ballPrevImage = null;
+            this.ballPrevBox = null;
+          }
+        },
+        appendDebugSimulationPoint(entry) {
+          if (!this.ctx || !entry || !this.debugStepsEnabled || !this.compiledScript) return;
+          if (!Number.isFinite(entry.simulatedRadialSteps) || !Number.isFinite(entry.simulatedAngularSteps)) {
+            return;
+          }
+          if (entry.start || !this.debugSimulationPoints.length) {
+            this.debugSimulationPoints = [];
+          }
+          const pt = this.stepsToCanvas(entry.simulatedRadialSteps, entry.simulatedAngularSteps);
+          if (!pt) return;
+          this.debugSimulationPoints.push(pt);
+          this.drawDebugSimulationPath();
+        },
+        drawDebugSimulationPath() {
+          if (!this.ctx) return;
+          this.trailInitialized = true;
+          this.drawBackground();
+          this.lastHeadX = null;
+          this.lastHeadY = null;
+          this.ballPrevImage = null;
+          this.ballPrevBox = null;
+          const pts = this.debugSimulationPoints;
+          if (!pts || !pts.length) {
+            return;
+          }
+          this.points = pts.map(p => ({ x: p.x, y: p.y }));
+          for (let i = 0; i < pts.length; i++) {
+            const current = pts[i];
+            if (i === 0) {
+              this.drawTrenchStamp(current.x, current.y);
+            } else {
+              const prev = pts[i - 1];
+              this.drawTrenchSegment(prev.x, prev.y, current.x, current.y);
+            }
+          }
+          const head = pts[pts.length - 1];
+          this.drawBallAt(head.x, head.y);
+          this.lastHeadX = head.x;
+          this.lastHeadY = head.y;
         },
         textFromDV(dv) { let str = ''; for (let i = 0; i < dv.byteLength; i++) { const c = dv.getUint8(i); if (c === 0) break; str += String.fromCharCode(c); } return str.trim(); },
         toggleRun() { this.running = !this.running; this.sendRun(); },
@@ -710,16 +1328,256 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
             catch (e) { this.log('Run write err: ' + e.message); }
           }
         },
-        // Removed runLedSelfTest / sendCommand / direct LED color helpers (unsupported)
+        async sendCommand(cmd) {
+          if (!this.chars.command) { throw new Error('Command characteristic unavailable'); }
+          const payload = new TextEncoder().encode(cmd);
+          await this.chars.command.writeValue(payload);
+          this.log('CMD ' + cmd);
+        },
+        async onDebugToggle(evt) {
+          const desired = evt.target.checked;
+          try {
+            await this.setDeviceDebug(desired);
+          } catch (err) {
+            evt.target.checked = !desired;
+            const msg = 'Debug stream toggle failed: ' + (err && err.message ? err.message : err);
+            this.setStatus(msg);
+          }
+        },
+        async setDeviceDebug(enable) {
+          if (!this.connected || !this.chars.command) {
+            throw new Error('Device not connected');
+          }
+          const verb = enable ? 'ON' : 'OFF';
+          this.setStatus('Requesting debug stream ' + verb);
+          try {
+            await this.sendCommand(`DEBUG_STEPS ${verb}`);
+            if (enable) {
+              this.clearDebugTrail();
+              this.lastDebugStep = null;
+              this.simulationRunning = false;
+              this.points = [];
+              this.drawBackground();
+            } else {
+              this.debugSimulationPoints = [];
+              this.simulationRunning = false;
+              this.regeneratePattern();
+            }
+            this.debugStepsEnabled = enable;
+          } catch (err) {
+            throw err;
+          }
+        },
+        async uploadScriptToDevice() {
+          if (this.scriptUploadInProgress) return;
+          if (!this.connected) { this.setStatus('Connect to the device before uploading'); return; }
+          if (!this.chars.command || !this.chars.script) {
+            this.setStatus('Firmware does not expose SandScript characteristics');
+            return;
+          }
+          if (!this.compiledScript) {
+            this.compileScript();
+            if (!this.compiledScript) {
+              this.setStatus('Fix compile errors before uploading');
+              return;
+            }
+          }
+          const encoder = new TextEncoder();
+          const normalized = this.scriptSource.replace(/\r\n?/g, '\n');
+          const scriptBytes = encoder.encode(normalized);
+          if (scriptBytes.length === 0) {
+            this.setStatus('Script is empty');
+            return;
+          }
+          if (scriptBytes.length > this.maxScriptBytes) {
+            this.setStatus(`Script exceeds ${this.maxScriptBytes} byte limit (${scriptBytes.length})`);
+            return;
+          }
+          let slotArg = '';
+          if (this.scriptTargetSlot) {
+            const slotNum = parseInt(this.scriptTargetSlot, 10);
+            if (Number.isFinite(slotNum) && slotNum > 0) {
+              slotArg = ' ' + slotNum;
+            } else {
+              this.setStatus('Slot must be a positive integer');
+              return;
+            }
+          }
+          const chunkCandidates = this.scriptChunkCandidates();
+          if (!chunkCandidates.length) chunkCandidates.push(20);
+          this.log(`[SCRIPT] Upload start len=${scriptBytes.length} candidates=${chunkCandidates.join(',')}`);
+          let success = false;
+          let lastError = null;
+          this.scriptUploadInProgress = true;
+          this.scriptUploadProgress = 0;
+          this.scriptUploadStatus = 'Preparing upload...';
+          try {
+            for (const chunkSize of chunkCandidates) {
+              this.scriptUploadProgress = 0;
+              this.scriptUploadStatus = `Uploading script (${chunkSize}-byte chunks)...`;
+              this.log(`[SCRIPT] Attempting chunk size ${chunkSize}`);
+              try {
+                await this.sendCommand(`SCRIPT_BEGIN ${scriptBytes.length}${slotArg}`);
+              } catch (beginErr) {
+                lastError = beginErr;
+                throw beginErr;
+              }
+              await this.sleep(35);
+              try {
+                await this.transmitScriptChunks(scriptBytes, chunkSize);
+                await this.sleep(25);
+                await this.sendCommand('SCRIPT_END');
+                success = true;
+                this.preferredScriptChunkSize = chunkSize;
+                break;
+              } catch (err) {
+                lastError = err;
+                this.log(`[SCRIPT] Chunk transfer failed (chunk=${chunkSize}): ${err.message || err}`);
+                this.scriptUploadStatus = `Attempt with ${chunkSize}-byte chunks failed: ${err.message || err}`;
+                try { await this.sendCommand('SCRIPT_ABORT'); } catch (_) { }
+                await this.sleep(200);
+              }
+            }
+            if (!success) {
+              const attempts = chunkCandidates.join(', ');
+              throw new Error(`Unable to upload script after trying chunk sizes ${attempts}${lastError ? ` (${lastError.message || lastError})` : ''}`);
+            }
+            this.scriptUploadStatus = `Uploaded ${scriptBytes.length} bytes (chunk ${this.preferredScriptChunkSize} B)`;
+            this.scriptUploadProgress = 100;
+            this.setStatus(`[SCRIPT] Uploaded ${scriptBytes.length} bytes`);
+            if (this.pattern !== 11) {
+              await this.selectPattern(11);
+            }
+          } catch (err) {
+            if (!success) {
+              try { await this.sendCommand('SCRIPT_ABORT'); } catch (_) { }
+            }
+            this.scriptUploadStatus = 'Upload failed: ' + (err.message || err);
+            this.setStatus('Script upload failed: ' + (err.message || err));
+          } finally {
+            this.scriptUploadInProgress = false;
+            if (!success) {
+              this.scriptUploadProgress = 0;
+            }
+          }
+        },
+
+        scriptChunkCandidates() {
+          const smallFirst = [20, 32, 40, 60, 80, 100, 128, 160, 180];
+          const sizes = [];
+          const preferred = this.preferredScriptChunkSize;
+          if (preferred && !sizes.includes(preferred)) sizes.push(preferred);
+          const hint = this.estimateScriptChunkHint();
+          if (hint && !sizes.includes(hint)) sizes.push(hint);
+          for (const preset of smallFirst) {
+            if (!sizes.includes(preset)) sizes.push(preset);
+          }
+          const unique = [];
+          for (const raw of sizes) {
+            const size = Math.max(1, Math.floor(raw));
+            if (!unique.includes(size)) unique.push(size);
+          }
+          // Always prioritize the safest minimum chunk size to avoid MTU violations.
+          unique.sort((a, b) => a - b);
+          return unique;
+        },
+
+        estimateScriptChunkHint() {
+          const hints = [];
+          const device = this.device;
+          if (device) {
+            if (typeof device.maxWriteValueLength === 'number') hints.push(device.maxWriteValueLength);
+            if (typeof device.maxWriteValueLengthWithoutResponse === 'number') hints.push(device.maxWriteValueLengthWithoutResponse);
+          }
+          const server = this.server;
+          if (server) {
+            if (typeof server.maxWriteValueLength === 'number') hints.push(server.maxWriteValueLength);
+            if (typeof server.maxWriteValueLengthWithoutResponse === 'number') hints.push(server.maxWriteValueLengthWithoutResponse);
+          }
+          const scriptChar = this.chars.script;
+          if (scriptChar) {
+            const svc = scriptChar.service;
+            if (svc && svc.device) {
+              const dev = svc.device;
+              if (typeof dev.maxWriteValueLength === 'number') hints.push(dev.maxWriteValueLength);
+              if (typeof dev.maxWriteValueLengthWithoutResponse === 'number') hints.push(dev.maxWriteValueLengthWithoutResponse);
+            }
+          }
+          const valid = hints.filter(v => Number.isFinite(v) && v > 0);
+          if (!valid.length) return null;
+          const attSafe = Math.max(...valid) - 3; // subtract ATT header for payload safety
+          const clamped = Math.max(1, Math.min(120, Math.floor(attSafe)));
+          return clamped;
+        },
+
+        async transmitScriptChunks(scriptBytes, chunkSize) {
+          const scriptChar = this.chars.script;
+          if (!scriptChar) throw new Error('Script characteristic missing');
+          const hasNoResponse = typeof scriptChar.writeValueWithoutResponse === 'function';
+          let mode = this.scriptWriteModePreference || 'withResponse';
+          if (mode === 'withoutResponse' && !hasNoResponse) mode = 'withResponse';
+          let useNoResponse = mode === 'withoutResponse';
+          let writer;
+          if (useNoResponse) {
+            writer = scriptChar.writeValueWithoutResponse.bind(scriptChar);
+          }
+          if (!writer || typeof writer !== 'function') {
+            writer = scriptChar.writeValue.bind(scriptChar);
+            useNoResponse = false;
+            mode = 'withResponse';
+          }
+          if (typeof writer !== 'function') throw new Error('Script characteristic not writable');
+          const safeChunk = Math.max(1, Math.floor(chunkSize));
+          const total = scriptBytes.length;
+          for (let offset = 0; offset < total; offset += safeChunk) {
+            const end = Math.min(offset + safeChunk, total);
+            const slice = scriptBytes.subarray(offset, end);
+            try {
+              await writer(slice);
+            } catch (err) {
+              if (useNoResponse && hasNoResponse) {
+                this.log('[SCRIPT] write-without-response failed; switching to acknowledged writes');
+                this.scriptWriteModePreference = 'withResponse';
+              }
+              err.chunkOffset = offset;
+              err.chunkSize = slice.length;
+              throw err;
+            }
+            this.scriptUploadProgress = Math.round((end / total) * 100);
+            if (useNoResponse) {
+              const pause = Math.min(150, Math.max(25, slice.length * 6));
+              await this.sleep(pause);
+            } else {
+              const pause = Math.min(120, Math.max(30, slice.length * 8));
+              await this.sleep(pause);
+            }
+          }
+          this.scriptWriteModePreference = useNoResponse ? 'withoutResponse' : 'withResponse';
+        },
+        sleep(ms) { return new Promise(res => setTimeout(res, ms)); },
+        // Removed direct LED color helpers (unsupported)
         async disconnectDevice() {
           if (this.device && this.device.gatt && this.device.gatt.connected) {
-            try { this.device.gatt.disconnect(); this.setStatus('Disconnected'); } catch (e) { this.log('Disconnect err: ' + e.message); }
+            try { this.device.gatt.disconnect(); } catch (e) { this.log('Disconnect err: ' + e.message); }
           }
+          this.onDisconnect();
+        },
+        onDisconnect() {
           this.connected = false;
+          this.connecting = false;
+          this.server = null;
+          this.chars = { speed: null, pattern: null, status: null, mode: null, run: null, telemetry: null, command: null, script: null };
+          this.debugStepsEnabled = false;
+          this.clearDebugTrail();
+          this.lastDebugStep = null;
+          this.setStatus('Device disconnected');
         },
         async reconnect() { if (!this.device) { return this.connect(); } if (this.connected || this.connecting) return; try { this.connecting = true; this.setStatus('Reconnecting...'); await this.device.gatt.connect(); this.connecting = false; await this.connect(); } catch (e) { this.connecting = false; this.setStatus('Reconnect failed: ' + e.message); } },
         async selectPattern(id) {
           this.pattern = id; this.setStatus('Selected pattern ' + id); this.regeneratePattern();
+          if (this.debugPoints.length) {
+            this.clearDebugTrail();
+          }
           if (this.chars.pattern) {
             try { const txt = new TextEncoder().encode(String(id)); await this.chars.pattern.writeValue(txt); }
             catch (e) { this.log('Pattern write err: ' + e.message); }
@@ -736,11 +1594,20 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
           this.drawBackground();
           this.renderFrame();
         },
-        clearPattern() { this.points = []; this.resetTrail(); this.drawBackground(); this.renderFrame(); },
+  clearPattern() { this.points = []; this.resetTrail(); this.clearDebugTrail(); this.drawBackground(); this.renderFrame(); },
         resetTrail() { this.lastHeadX = null; this.lastHeadY = null; this.trailInitialized = false; this.ballPrevImage = null; this.ballPrevBox = null; },
+        clearDebugTrail() {
+          this.debugPoints = [];
+          this.debugSimulationPoints = [];
+          this.debugLastCanvasPoint = null;
+          if (this.debugCtx && this.debugCanvas) {
+            this.debugCtx.clearRect(0, 0, this.debugCanvas.width, this.debugCanvas.height);
+          }
+        },
         centerView() { this.renderFrame(); },
-        toggleSimulation() { this.simulationRunning = !this.simulationRunning; if (this.simulationRunning) { this.lastTs = 0; requestAnimationFrame(this.stepSimulation.bind(this)); } },
+        toggleSimulation() { if (this.debugStepsEnabled) { this.simulationRunning = false; return; } this.simulationRunning = !this.simulationRunning; if (this.simulationRunning) { this.lastTs = 0; requestAnimationFrame(this.stepSimulation.bind(this)); } },
         stepOnce() {
+          if (this.debugStepsEnabled) return;
           if (this.simulationRunning) return; // disabled while running
           if (this.points.length < 2 || this.segmentPolar.length === 0) return;
             // Determine advance distance: move to end of current segment, or wrap if at end
@@ -887,33 +1754,10 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
               const hx = cx + r * Math.cos(theta); const hy = cy + r * Math.sin(theta);
               // Incremental stamping directly on main canvas
               {
-                const spacing = this.ballRadiusPx * this.trenchStampSpacingFactor;
-                const stampSegment = (x0, y0, x1, y1) => {
-                  const dx = x1 - x0, dy = y1 - y0; const dist = Math.hypot(dx, dy);
-                  if (dist === 0) return;
-                  const steps = Math.max(1, Math.floor(dist / spacing));
-                  for (let i = 0; i <= steps; i++) {
-                    const f = i / steps; const sx = x0 + dx * f; const sy = y0 + dy * f;
-                    const trench = ctx;
-                    const innerR = this.ballRadiusPx * 0.2;
-                    const outerR = this.ballRadiusPx + this.trenchSoftness;
-                    const g = trench.createRadialGradient(sx, sy, innerR, sx, sy, outerR);
-                    // Trench impression with reduced per-stamp opacity (so overlap builds depth)
-                    g.addColorStop(0.0, 'rgba(255,255,255,0.55)');          // reduced center
-                    g.addColorStop(0.28, 'rgba(245,245,245,0.38)');
-                    g.addColorStop(0.55, 'rgba(230,230,230,0.22)');
-                    g.addColorStop(0.75, 'rgba(200,200,200,0.15)');         // subtle mid-band
-                    g.addColorStop(0.90, 'rgba(180,180,180,0.10)');         // darker rim hint
-                    g.addColorStop(1.0, 'rgba(150,150,150,0)');                // fade out
-                    trench.globalCompositeOperation = 'source-over';
-                    trench.fillStyle = g;
-                    trench.beginPath(); trench.arc(sx, sy, outerR, 0, Math.PI * 2); trench.fill();
-                  }
-                };
-                if (this.lastHeadX != null) {
-                  stampSegment(this.lastHeadX, this.lastHeadY, hx, hy);
+                if (this.lastHeadX != null && this.lastHeadY != null) {
+                  this.drawTrenchSegment(this.lastHeadX, this.lastHeadY, hx, hy);
                 } else {
-                  stampSegment(hx, hy, hx, hy);
+                  this.drawTrenchStamp(hx, hy);
                 }
                 this.lastHeadX = hx; this.lastHeadY = hy;
               }
@@ -922,27 +1766,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
               if (this.ballPrevImage && this.ballPrevBox) {
                 try { ctx.putImageData(this.ballPrevImage, this.ballPrevBox.x, this.ballPrevBox.y); } catch (_) { }
               }
-              // Soft glow under ball instead of dark shadow for lighter style
-              const glow = ctx.createRadialGradient(hx, hy, ballR * 0.2, hx, hy, ballR * 1.3);
-              glow.addColorStop(0, 'rgba(255,255,255,0.55)');
-              glow.addColorStop(1, 'rgba(255,255,255,0)');
-              ctx.save(); ctx.globalCompositeOperation = 'lighter';
-              ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(hx, hy, ballR * 1.3, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-              // Ball body with highlight
-              const grad = ctx.createRadialGradient(hx - ballR * 0.4, hy - ballR * 0.4, ballR * 0.2, hx, hy, ballR);
-              grad.addColorStop(0, '#eeeeee');
-              grad.addColorStop(0.45, '#d9d9d9');
-              grad.addColorStop(1, '#b5b5b5');
-              ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(hx, hy, ballR, 0, Math.PI * 2); ctx.fill();
-              // Specular highlight
-              ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath(); ctx.arc(hx - ballR * 0.35, hy - ballR * 0.35, ballR * 0.3, 0, Math.PI * 2); ctx.fill();
-              // Snapshot area under ball for next frame restore
-              const pad = Math.ceil(ballR * 1.4);
-              const bx = Math.max(0, hx - pad);
-              const by = Math.max(0, hy - pad);
-              const bw = Math.min(this.canvas.width - bx, pad * 2);
-              const bh = Math.min(this.canvas.height - by, pad * 2);
-              try { this.ballPrevImage = ctx.getImageData(bx, by, bw, bh); this.ballPrevBox = { x: bx, y: by }; } catch (_) { }
+              this.drawBallAt(hx, hy);
             }
           } else if (this.points.length === 1) {
             const p = this.points[0]; ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
@@ -951,9 +1775,19 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
         exportImage() {
           // Ensure frame is up to date
           this.renderFrame();
+          let sourceCanvas = this.canvas;
+          if (this.debugCanvas && this.debugPoints.length) {
+            const composite = document.createElement('canvas');
+            composite.width = this.canvas.width;
+            composite.height = this.canvas.height;
+            const cctx = composite.getContext('2d');
+            cctx.drawImage(this.canvas, 0, 0);
+            cctx.drawImage(this.debugCanvas, 0, 0);
+            sourceCanvas = composite;
+          }
           const link = document.createElement('a');
           link.download = 'sand-pattern-' + this.pattern + '.png';
-          link.href = this.canvas.toDataURL('image/png');
+          link.href = sourceCanvas.toDataURL('image/png');
           link.click();
         },
         // Pattern generators – firmware-accurate translation ---------------------------
@@ -1386,7 +2220,15 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir` },
           loadExample(ex) { this.scriptSource = ex.code; if (this.autoRecompile) { this.compileScript(); if (this.autoSimulate) this.simulateScript(); } },
           compileScript() { const res = compileDSL(this.scriptSource); if (!res.ok) { this.compileErrors = res.errors.map(e => ({ message: enhanceErrorMessage(e.message), pos: e.pos })); this.compiledScript = null; } else { this.compileErrors = []; this.compiledScript = res.script; if (this.autoSimulate) this.simulateScript(); } },
           useScriptPattern() { if (!this.compiledScript) return; this.pattern = 11; this.setStatus('Using custom script'); this.regeneratePattern(); },
-          simulateScript() { if (!this.compiledScript) { this.setStatus('Compile first'); return; } if (this.pattern !== 11) this.pattern = 11; this.regeneratePattern(); },
+          simulateScript() {
+            if (this.debugStepsEnabled) {
+              this.setStatus('Simulation controlled by device debug stream');
+              return;
+            }
+            if (!this.compiledScript) { this.setStatus('Compile first'); return; }
+            if (this.pattern !== 11) this.pattern = 11;
+            this.regeneratePattern();
+          },
           evalCompiledScript(current, startFlag, MAX_R_STEPS, STEPS_PER_A_AXIS_REV) {
             // Standalone evaluator variant (mirrors factory 11 logic) for preview mode.
             if (!this.compiledScript) return current;

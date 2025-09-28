@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Arduino: Compile Sand Garden",
+      "type": "shell",
+      "command": "arduino-cli",
+      "args": [
+        "compile",
+        "--fqbn",
+        "arduino:esp32:nano_nora",
+        "--warnings",
+        "default",
+        "--build-property",
+        "compiler.cpp.extra_flags=-fpermissive",
+        "--export-binaries",
+        "."
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Arduino: Upload Sand Garden",
+      "type": "shell",
+      "command": "arduino-cli",
+      "dependsOn": "Arduino: Compile Sand Garden",
+      "args": [
+        "upload",
+        "--fqbn",
+        "arduino:esp32:nano_nora",
+        "."
+      ],
+      "group": "none",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": []
+}

@@ -1,7 +1,7 @@
 
 ## Changes since original
 
-- 
+- Added an on-device SandScript compiler/VM with BLE upload pipeline, built-in presets, and status/error reporting. The last pattern slot now runs the most recently compiled script (preset or uploaded via BLE).
 - Output pin number for A0 is not correct for some reason on ESP32. I had to specify `GPIO_NUM_1` manually for that pin.
 - Joystick analog reads did not work as expected on ESP32 — the resting state was around 75% of the max value. The original Arduino Nano is 5V, but the ESP32 uses 3.3V logic. Since the joystick gets its VCC from USB-C (typically 5V), this can **overdrive the ESP32 analog pins**. Technically, you should use a voltage divider to safely drop the joystick output to 3.3V for the ESP32. For quick testing, I applied a naive offset in code, but **for long-term reliability, add a voltage divider on each analog line**.
  - Added explicit BLE server callbacks (`ServerCallbacks`) to restart advertising after a disconnect. Some host stacks (or rapid connect/disconnect cycles) caused advertising to stop after the first client session; now `onDisconnect` always calls `NimBLEDevice::getAdvertising()->start()` and emits a status line like `[BLE] DISCONNECT reason=0`.
@@ -73,6 +73,32 @@ Write ASCII tokens (no arguments yet) to the Command characteristic:
 3. It throttles and attempts a restart (status line `[BLE] ADV_RESTART reason=wd`).
 
 This covers edge cases where the browser (Web Bluetooth) tab is refreshed or closed without performing a clean GATT disconnect, leaving the peripheral believing a connection is still pending until the supervision timeout. After the timeout / disconnect event, advertising is explicitly restarted.
+
+### SandScript upload, runtime, and presets
+
+- The GATT service now exposes a binary-safe **SandScript chunk characteristic** `9b6c7e18-3b2c-4d8c-9d7c-5e2a6d1f8b01` (write / write-without-response). Use it to stream plain-text script bytes (UTF-8).
+- The command characteristic accepts the following tokens to orchestrate transfers:
+  - `SCRIPT_BEGIN <numBytes> [patternIndex]` – reserve a transfer slot. `patternIndex` is optional; omit or use `0` to target the dedicated SandScript pattern (last slot).
+  - `SCRIPT_DATA` – implicit for each write to the chunk characteristic (chunks can be any size up to negotiated MTU).
+  - `SCRIPT_END` – finalize, compile, and activate the script. Status characteristic emits `[SCRIPT] READY len=<n>` and either `[SCRIPT] LOADED ...` or a `[SCRIPT] COMPILE_ERR ...` message.
+  - `SCRIPT_ABORT` – cancel the current transfer.
+  - `SCRIPT_STATUS` – echo the internal transfer state (helpful for debugging clients).
+  - Transfers idle for 5 seconds automatically timeout (`[SCRIPT] ERR timeout ...`) and reset.
+- Script compile / runtime errors surface as status lines with `PSG:` prefixes (straight from the compiler). The last compiled script drives the **SandScript pattern slot**, which is appended to the end of the pattern list (e.g., `Pattern 11` if ten stock patterns exist).
+- On-device DSL quick reference:
+  - Inputs: `radius` (cm), `angle` (degrees), `start` (1 on first step), `rev` (continuous revolutions), `steps` (evaluation counter), `time` (ms since script started).
+  - Outputs: assign to `next_radius`, `next_angle`, `delta_radius`, `delta_angle` (all in cm / degrees). Locals are automatically permitted (`foo = ...`).
+  - Functions: `sin`, `cos` (degrees in / unitless out), `abs`, `clamp(value, min, max)`, `sign`.
+  - Operators: `+`, `-`, `*`, `/`, `%`, unary `-`. Comments start with `#` and run to end-of-line. One assignment per line; no semicolons needed.
+- Presets bundled in firmware:
+  1. **BloomSpiral** – gentle expanding spiral with periodic bloom (loaded automatically at boot).
+  2. **LotusOrbit** – oscillating radial orbit with harmonic angle sweep.
+- Use the command characteristic to manage presets:
+  - `SCRIPT_PRESET` *(no args)* – load preset #1 (`BloomSpiral`).
+  - `SCRIPT_PRESET <index>` – 1-based numeric index (e.g., `SCRIPT_PRESET 2`).
+  - `SCRIPT_PRESET <name>` – case-insensitive name (`SCRIPT_PRESET lotusorbit`).
+  - `SCRIPT_PRESET list` – list available presets in a single status line.
+  - Successful loads automatically switch to the SandScript pattern (or force a restart if already selected).
 
 ## Web Visualization (Firmware-Accurate Patterns)
 

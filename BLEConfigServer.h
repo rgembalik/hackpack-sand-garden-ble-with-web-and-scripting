@@ -19,6 +19,8 @@
 #define SG_TELEMETRY_CHAR_UUID      "9b6c7e16-3b2c-4d8c-9d7c-5e2a6d1f8b01"  // telemetry snapshots / streaming
 // Generic command channel (ASCII). Client writes commands like "SELFTEST"; device responds via status/telemetry.
 #define SG_COMMAND_CHAR_UUID        "9b6c7e17-3b2c-4d8c-9d7c-5e2a6d1f8b01"
+// SandScript bulk transfer characteristic (write-only chunks)
+#define SG_SCRIPT_CHAR_UUID         "9b6c7e18-3b2c-4d8c-9d7c-5e2a6d1f8b01"
 
 // Name of the BLE peripheral
 #define SG_DEVICE_NAME "Sand Garden"
@@ -33,6 +35,10 @@ public:
   // Optional override for generic commands (uppercased token). Default no-op keeps backward compatibility.
   // 'cmd' is the uppercase trimmed command token; 'raw' holds the original payload (could include arguments later).
   virtual void onCommandReceived(const String &cmd, const std::string &raw) { (void)cmd; (void)raw; }
+  // Called when a completed SandScript payload is received (after SCRIPT_END). Default no-op.
+  virtual void onPatternScriptReceived(const std::string &script, int slotIndex) { (void)script; (void)slotIndex; }
+  // Optional progress messages (BEGIN/CHUNK/END/ABORT) for UI logging. Default ignore.
+  virtual void onPatternScriptStatus(const String &msg) { (void)msg; }
 };
 
 class BLEConfigServer {
@@ -92,12 +98,22 @@ private:
   private:
     BLEConfigServer *_parent;
   };
+  class ScriptCallbacks : public NimBLECharacteristicCallbacks {
+  public:
+    ScriptCallbacks(BLEConfigServer *parent) : _parent(parent) {}
+    void onWrite(NimBLECharacteristic *c, NimBLEConnInfo &info) override;
+  private:
+    BLEConfigServer *_parent;
+  };
 
   void _applySpeedWrite(const std::string &valRaw);
   void _applyPatternWrite(const std::string &valRaw);
   void _applyModeWrite(const std::string &valRaw);
   void _applyRunWrite(const std::string &valRaw);
   void _applyCommandWrite(const std::string &valRaw);
+  void _handleScriptCommand(const std::string &token, const std::string &payload);
+  void _resetScriptTransfer(const char *reasonTag, bool notify = true);
+  void _finalizeScriptTransfer();
 
   NimBLEServer *_server = nullptr;
   NimBLEService *_service = nullptr;
@@ -108,6 +124,7 @@ private:
   NimBLECharacteristic *_runChar = nullptr;       // read/write/notify
   NimBLECharacteristic *_telemetryChar = nullptr; // notify/read
   NimBLECharacteristic *_commandChar = nullptr;   // write/read
+  NimBLECharacteristic *_scriptChar = nullptr;    // write-only chunk sink
 
   ISGConfigListener *_listener = nullptr;
 
@@ -162,4 +179,12 @@ private:
 
   std::vector<uint16_t> _connHandles; // active connections
   uint32_t _lastAdvAttemptMs = 0;     // throttle advertising restart attempts
+  std::string _scriptBuffer;
+  size_t _scriptExpectedLen = 0;
+  size_t _scriptReceivedLen = 0;
+  int _scriptTargetSlot = -1;
+  bool _scriptActive = false;
+  uint32_t _scriptLastChunkMs = 0;
+  bool _scriptProgressDirty = false;
+  uint32_t _scriptLastProgressNotifyMs = 0;
 };

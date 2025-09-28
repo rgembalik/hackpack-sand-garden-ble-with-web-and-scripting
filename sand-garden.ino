@@ -37,6 +37,7 @@ INCLUDED LIBRARIES
 #include <NimBLEDevice.h>    // Ensure NimBLE core available for BLEConfigServer
 #include "BLEConfigServer.h" // BLE configuration server (modular config service)
 #include "Positions.h"       // shared Positions struct for external modules
+#include "PatternScript.h"   // SandScript compiler/runtime
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /*
@@ -151,6 +152,7 @@ Positions pattern_PentagonRainbow(Positions current, bool restartPattern = false
 Positions pattern_RandomWalk1(Positions current, bool restartPattern = false);         // Random walk 1 (connected by arcs)
 Positions pattern_RandomWalk2(Positions current, bool restartPattern = false);         // Random walk 2 (connected by lines)
 Positions pattern_AccidentalButterfly(Positions current, bool restartPattern = false); // Accidental Butterfly
+Positions pattern_SandScript(Positions current, bool restartPattern = false);          // SandScript-driven pattern (dynamic slot)
 
 /**
  * @brief Typedef for storing pointers to pattern-generating functions.
@@ -181,10 +183,158 @@ typedef Positions (*PatternFunction)(Positions, bool);
  * but keep it in mind when working with the array.
  */
 PatternFunction patterns[] = {pattern_SimpleSpiral, pattern_Cardioids, pattern_WavySpiral, pattern_RotatingSquares, pattern_PentagonSpiral, pattern_HexagonVortex, pattern_PentagonRainbow, pattern_RandomWalk1,
-                              pattern_RandomWalk2, pattern_AccidentalButterfly};
+                              pattern_RandomWalk2, pattern_AccidentalButterfly, pattern_SandScript};
+
+static const size_t PATTERN_COUNT = sizeof(patterns) / sizeof(patterns[0]);
+static const int SCRIPT_PATTERN_INDEX = static_cast<int>(PATTERN_COUNT); // 1-based index for BLE/UI
+
+struct ActiveSandScript {
+  PatternScript program;
+  PatternScriptRuntime runtime;
+  bool loaded = false;
+  String label = String("Dynamic");     // descriptive tag for status logs
+  String lastError; // most recent compile/runtime error message
+  String source;    // raw source (for diagnostics/status echo)
+};
+
+static ActiveSandScript g_activeScript;
+static const uint32_t SANDSCRIPT_MIN_STEP_INTERVAL_US = 4000; // ~250 Hz evaluation ceiling
+static const uint32_t SANDSCRIPT_IDLE_EVAL_INTERVAL_US = 40000; // 25 Hz when fully idle
+static const uint16_t SANDSCRIPT_IDLE_SPIN_THRESHOLD = 250;     // ~1 second of no motion at 4 ms cadence
+static const uint16_t SANDSCRIPT_IDLE_STEP_TOLERANCE_STEPS = 2; // treat <=2 step delta as zero motion
+static elapsedMicros g_sandScriptStepTimer;
+static uint16_t g_sandScriptIdleSpinCount = 0;
+static bool g_sandScriptIdleBackoffActive = false;
+static bool g_sandScriptIdleNotified = false;
+
+struct SandScriptEvalInputsSnapshot
+{
+  float radiusCm = 0.0f;
+  float angleDeg = 0.0f;
+  float rev = 0.0f;
+  uint32_t steps = 0;
+  uint32_t timeMs = 0;
+  bool start = false;
+  bool valid = false;
+};
+
+static SandScriptEvalInputsSnapshot g_lastSandScriptEvalInputs;
+
+static void resetActiveScriptRuntime() {
+  g_activeScript.runtime = PatternScriptRuntime();
+  g_sandScriptStepTimer = SANDSCRIPT_MIN_STEP_INTERVAL_US;
+  g_sandScriptIdleSpinCount = 0;
+  g_sandScriptIdleBackoffActive = false;
+  g_sandScriptIdleNotified = false;
+  g_lastSandScriptEvalInputs = SandScriptEvalInputsSnapshot();
+}
+
+static void clearActiveScript(const String &reason) {
+  g_activeScript = ActiveSandScript();
+  g_activeScript.label = "Dynamic";
+  if (reason.length()) {
+    g_activeScript.lastError = reason;
+  }
+  g_sandScriptStepTimer = SANDSCRIPT_MIN_STEP_INTERVAL_US;
+  g_sandScriptIdleSpinCount = 0;
+  g_sandScriptIdleBackoffActive = false;
+  g_sandScriptIdleNotified = false;
+  g_lastSandScriptEvalInputs = SandScriptEvalInputsSnapshot();
+}
+
+static bool compileAndActivateSandScript(const char *src, size_t len, const String &label, String &errOut) {
+  if (!src) {
+    errOut = "null script";
+    clearActiveScript(errOut);
+    return false;
+  }
+  if (len > PSG_MAX_SCRIPT_CHARS) {
+    errOut = String("script exceeds ") + PSG_MAX_SCRIPT_CHARS + " chars";
+    clearActiveScript(errOut);
+    return false;
+  }
+
+  PatternScript compiled = {};
+  String compileErr;
+  PSGCompileResult res = compilePatternScript(src, compiled, &compileErr);
+  if (res != PSG_OK) {
+    errOut = compileErr.length() ? compileErr : String(psgErrorToString(res));
+    clearActiveScript(errOut);
+    return false;
+  }
+
+  g_activeScript.program = compiled;
+  g_activeScript.loaded = true;
+  g_activeScript.label = label.length() ? label : String("Dynamic");
+  g_activeScript.lastError = "";
+  g_activeScript.source = String(src);
+  resetActiveScriptRuntime();
+  errOut = "";
+  return true;
+}
+
+static bool compileAndActivateSandScript(const std::string &src, const String &label, String &errOut) {
+  return compileAndActivateSandScript(src.c_str(), src.size(), label, errOut);
+}
+
+struct SandScriptPreset {
+  const char *name;
+  const char *source;
+};
+
+static const SandScriptPreset kSandScriptPresets[] = {
+  {
+    "BloomSpiral",
+    "# Sand garden bloom spiral\n"
+    "next_radius = clamp(radius + 0.18 * sign(sin(angle + rev * 45)), 0.6, 8.3)\n"
+    "next_angle = angle + 18 + 10 * sin(rev * 60)\n"
+  },
+  {
+    "LotusOrbit",
+    "# Gentle orbiting flower\n"
+    "delta_radius = 0.4 * sin(rev * 180)\n"
+    "delta_angle = 24 + 12 * sin(rev * 90)\n"
+  }
+};
+
+static const size_t SANDSCRIPT_PRESET_COUNT = sizeof(kSandScriptPresets) / sizeof(kSandScriptPresets[0]);
+
+static int findSandScriptPresetIndex(const String &name) {
+  String needle = name;
+  needle.toLowerCase();
+  for (size_t i = 0; i < SANDSCRIPT_PRESET_COUNT; ++i)
+  {
+    String candidate(kSandScriptPresets[i].name);
+    candidate.toLowerCase();
+    if (candidate == needle)
+    {
+      return static_cast<int>(i);
+    }
+  }
+  return -1;
+}
+
+static bool compileSandScriptPreset(size_t index, String &errOut) {
+  if (index >= SANDSCRIPT_PRESET_COUNT)
+  {
+    errOut = "preset out of range";
+    return false;
+  }
+  const SandScriptPreset &preset = kSandScriptPresets[index];
+  return compileAndActivateSandScript(preset.source, strlen(preset.source), String(preset.name), errOut);
+}
 
 // ---------------- BLE Configuration Integration (listener defined later to access globals) ----------------
 static BLEConfigServer bleConfig; // forward object; listener class will be defined after globals
+
+static std::string g_pendingScriptSource;
+static int g_pendingScriptSlot = -1;
+static String g_pendingScriptLabel;
+static volatile bool g_pendingScriptReady = false;
+static uint32_t g_pendingScriptQueuedMs = 0;
+
+static bool g_debugStepStreaming = false;
+static uint32_t g_debugStepCounter = 0;
 
 // Now that bleConfig is defined we implement the calibration function which emits a status line.
 
@@ -275,13 +425,237 @@ public:
       }
     }
   }
+  void onPatternScriptStatus(const String &msg) override
+  {
+    bleConfig.notifyStatus(msg);
+  }
+  void onPatternScriptReceived(const std::string &script, int slotIndex) override
+  {
+    String label = String("BLE");
+    if (slotIndex >= 1)
+    {
+      label += String("-slot") + String(slotIndex);
+    }
+    bool replacing = g_pendingScriptReady;
+    g_pendingScriptSource = script;
+    g_pendingScriptSlot = slotIndex;
+    g_pendingScriptLabel = label;
+    g_pendingScriptReady = true;
+    g_pendingScriptQueuedMs = millis();
+    String msg = String("[SCRIPT] QUEUED len=") + String((unsigned long)script.size());
+    if (replacing)
+    {
+      msg += " (replacing previous pending)";
+    }
+    bleConfig.notifyStatus(msg);
+  }
   void onCommandReceived(const String &cmd, const std::string &raw) override
   {
+    if (cmd == "SCRIPT_PRESET")
+    {
+      String rawStr(raw.c_str());
+      int space = rawStr.indexOf(' ');
+      String arg = "";
+      if (space >= 0)
+      {
+        arg = rawStr.substring(space + 1);
+        arg.trim();
+      }
+      if (arg.equalsIgnoreCase("list"))
+      {
+        String msg = "[SCRIPT] PRESETS";
+        for (size_t i = 0; i < SANDSCRIPT_PRESET_COUNT; ++i)
+        {
+          msg += " ";
+          msg += String(i + 1);
+          msg += ":";
+          msg += kSandScriptPresets[i].name;
+        }
+        bleConfig.notifyStatus(msg);
+        return;
+      }
+
+      int presetIndex = 0;
+      bool presetResolved = false;
+      if (arg.length() > 0)
+      {
+        bool argIsNumber = true;
+        for (size_t i = 0; i < (size_t)arg.length(); ++i)
+        {
+          if (!isDigit(arg[i]))
+          {
+            argIsNumber = false;
+            break;
+          }
+        }
+        if (argIsNumber)
+        {
+          long val = arg.toInt();
+          if (val < 1)
+            val = 1;
+          presetIndex = static_cast<int>(val - 1);
+          presetResolved = (presetIndex >= 0 && presetIndex < (int)SANDSCRIPT_PRESET_COUNT);
+        }
+        else
+        {
+          int found = findSandScriptPresetIndex(arg);
+          if (found >= 0)
+          {
+            presetIndex = found;
+            presetResolved = true;
+          }
+        }
+      }
+      else
+      {
+        presetResolved = true; // default to first preset
+        presetIndex = 0;
+      }
+
+      if (!presetResolved)
+      {
+        bleConfig.notifyStatus(String("[SCRIPT] PRESET_ERR unknown ") + arg);
+        return;
+      }
+
+      String err;
+      if (compileSandScriptPreset(presetIndex, err))
+      {
+        String msg = String("[SCRIPT] PRESET_LOAD idx=") + String(presetIndex + 1) + " name=" + kSandScriptPresets[presetIndex].name;
+        bleConfig.notifyStatus(msg);
+        if (currentPattern == SCRIPT_PATTERN_INDEX)
+        {
+          patternSwitched = true;
+        }
+        else
+        {
+          setPatternLocal(SCRIPT_PATTERN_INDEX);
+        }
+      }
+      else
+      {
+        if (!err.length())
+        {
+          err = g_activeScript.lastError;
+        }
+        bleConfig.notifyStatus(String("[SCRIPT] PRESET_ERR ") + err);
+      }
+      return;
+    }
+
+    if (cmd == "DEBUG_STEPS")
+    {
+      String rawStr(raw.c_str());
+      String arg;
+      int space = rawStr.indexOf(' ');
+      if (space >= 0)
+      {
+        arg = rawStr.substring(space + 1);
+        arg.trim();
+      }
+
+      if (!arg.length())
+      {
+        bleConfig.notifyStatus(String("[DEBUG] STEPS ") + (g_debugStepStreaming ? "ON" : "OFF") + " count=" + String((unsigned long)g_debugStepCounter));
+        return;
+      }
+
+      bool newState = g_debugStepStreaming;
+      if (arg.equalsIgnoreCase("ON") || arg.equalsIgnoreCase("TRUE") || arg == "1")
+      {
+        newState = true;
+      }
+      else if (arg.equalsIgnoreCase("OFF") || arg.equalsIgnoreCase("FALSE") || arg == "0")
+      {
+        newState = false;
+      }
+      else if (arg.equalsIgnoreCase("TOGGLE"))
+      {
+        newState = !g_debugStepStreaming;
+      }
+      else
+      {
+        bleConfig.notifyStatus(String("[DEBUG] STEPS_ERR arg=") + arg);
+        return;
+      }
+
+      g_debugStepStreaming = newState;
+      g_debugStepCounter = 0;
+      bleConfig.notifyStatus(String("[DEBUG] STEPS ") + (newState ? "ON" : "OFF"));
+      return;
+    }
+
+    if (cmd.startsWith("SCRIPT_"))
+    {
+      return; // handled by BLEConfigServer internally
+    }
     // Unknown command
     bleConfig.notifyStatus(String("[CMD] UNKNOWN ") + cmd);
   }
 };
 static SandGardenConfigListener bleListener;
+
+static void processPendingSandScript()
+{
+  if (!g_pendingScriptReady)
+  {
+    return;
+  }
+
+  std::string script = std::move(g_pendingScriptSource);
+  g_pendingScriptSource.clear();
+  int slot = g_pendingScriptSlot;
+  g_pendingScriptSlot = -1;
+  String label = g_pendingScriptLabel;
+  g_pendingScriptLabel = String();
+  g_pendingScriptReady = false;
+  uint32_t queuedAt = g_pendingScriptQueuedMs;
+  g_pendingScriptQueuedMs = 0;
+
+  uint32_t now = millis();
+  uint32_t waitMs = queuedAt ? (now - queuedAt) : 0;
+  String startMsg = String("[SCRIPT] COMPILE start bytes=") + String((unsigned long)script.size());
+  if (waitMs > 0)
+  {
+    startMsg += " wait=";
+    startMsg += String((unsigned long)waitMs);
+    startMsg += "ms";
+  }
+  bleConfig.notifyStatus(startMsg);
+
+  yield();
+
+  String err;
+  bool ok = compileAndActivateSandScript(script, label, err);
+  if (ok)
+  {
+    bleConfig.notifyStatus("[SCRIPT] COMPILE ok");
+    int resolvedSlot = (slot >= 1 && slot <= (int)PATTERN_COUNT) ? slot : SCRIPT_PATTERN_INDEX;
+    String msg = String("[SCRIPT] LOADED bytes=") + String((unsigned long)script.size()) + " slot=" + String(resolvedSlot);
+    if (g_activeScript.label.length())
+    {
+      msg += " tag=" + g_activeScript.label;
+    }
+    bleConfig.notifyStatus(msg);
+    if (currentPattern == resolvedSlot)
+    {
+      patternSwitched = true;
+    }
+    else
+    {
+      setPatternLocal(resolvedSlot);
+    }
+  }
+  else
+  {
+    String msg = String("[SCRIPT] COMPILE_ERR ") + err;
+    bleConfig.notifyStatus(msg);
+    if (!err.length())
+    {
+      bleConfig.notifyStatus(String("[SCRIPT] CODE ") + psgErrorToString(PSG_ERR_SYNTAX));
+    }
+  }
+}
 
 // Wrapper functions ensure BLE characteristics stay authoritative when local inputs change
 static void setPatternLocal(int p)
@@ -347,6 +721,58 @@ static void heartbeatTelemetry()
     telemetryHeartbeat = 0;
     bleConfig.notifyTelemetry("HB");
   }
+}
+
+// Forward declarations for conversion helpers used by telemetry routines
+float convertStepsToDegrees(int steps);
+float convertStepsToRadians(float steps);
+float convertStepsToMM(float steps);
+
+static void emitPatternStepTelemetry(const Positions &planned, const Positions &actual, bool restartFlag)
+{
+  if (!g_debugStepStreaming)
+  {
+    return;
+  }
+
+  uint32_t idx = ++g_debugStepCounter;
+  const float radiusMm = convertStepsToMM(static_cast<float>(actual.radial));
+  const float angleDeg = convertStepsToDegrees(actual.angular);
+  const float angleRad = convertStepsToRadians(static_cast<float>(actual.angular));
+  const float xMm = radiusMm * cosf(angleRad);
+  const float yMm = radiusMm * sinf(angleRad);
+
+  String msg = String("STEP idx=") + String(idx) +
+               " tr=" + String(planned.radial) +
+               " ta=" + String(planned.angular) +
+               " cr=" + String(actual.radial) +
+               " ca=" + String(actual.angular) +
+               " mm=" + String(radiusMm, 2) +
+               " deg=" + String(angleDeg, 2) +
+               " x=" + String(xMm, 2) +
+               " y=" + String(yMm, 2) +
+               " pat=" + String(currentPattern) +
+               " auto=" + String(autoMode ? 1 : 0) +
+               " run=" + String(runPattern ? 1 : 0) +
+               " start=" + String(restartFlag ? 1 : 0);
+
+  if (currentPattern == SCRIPT_PATTERN_INDEX && g_lastSandScriptEvalInputs.valid)
+  {
+    msg += " dslrcm=" + String(g_lastSandScriptEvalInputs.radiusCm, 3);
+    msg += " dsladeg=" + String(g_lastSandScriptEvalInputs.angleDeg, 2);
+    msg += " dslrev=" + String(g_lastSandScriptEvalInputs.rev, 4);
+    msg += " dslsteps=" + String((unsigned long)g_lastSandScriptEvalInputs.steps);
+    msg += " dsltime=" + String((unsigned long)g_lastSandScriptEvalInputs.timeMs);
+    msg += " dslstart=" + String(g_lastSandScriptEvalInputs.start ? 1 : 0);
+  }
+
+  if (currentPattern == SCRIPT_PATTERN_INDEX && g_activeScript.label.length())
+  {
+    msg += " tag=";
+    msg += g_activeScript.label;
+  }
+
+  bleConfig.notifyTelemetry(msg);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -622,6 +1048,22 @@ void setup()
   FastLED.show();
   bleConfig.notifyStatus(String("[LEDINIT] pin=") + LED_DATA_PIN + " count=" + NUM_LEDS + " maxBrt=" + MAX_BRIGHTNESS);
 
+  PatternScriptUnits units;
+  units.stepsPerCm = STEPS_PER_MM * 10.0f;
+  units.stepsPerDeg = (float)STEPS_PER_DEG;
+  units.maxRadiusCm = (float)MAX_R_STEPS / units.stepsPerCm;
+  configurePatternScriptUnits(units);
+  clearActiveScript("");
+  String presetInitErr;
+  if (compileSandScriptPreset(0, presetInitErr))
+  {
+    bleConfig.notifyStatus(String("[SCRIPT] PRESET ") + kSandScriptPresets[0].name + " ready");
+  }
+  else if (presetInitErr.length())
+  {
+    bleConfig.notifyStatus(String("[SCRIPT] PRESET_ERR ") + presetInitErr);
+  }
+
   // (Removed startup LED self-test)
 
   homeRadius(); // crash home the radial axis. This is a blocking function.
@@ -642,6 +1084,7 @@ the gantry from the selected pattern functions or from manual mode.
 
 void loop()
 {
+  processPendingSandScript();
   bleConfig.loop(); // service BLE events if needed
   // (Removed LED direct, self-test, and scan debug handling)
 
@@ -736,11 +1179,18 @@ void loop()
       // to move to (radius, angle) = (1000 steps, 45 degrees (converted to steps)).
       // There is only one position on the sand tray that corresponds to those coordinates.
       targetPositions = patterns[currentPattern - 1](currentPositions, patternSwitched); // subtracing 1 here because I count patterns from 1, but the array that stores them is 0-indexed.
+      bool debugRestart = patternSwitched;
+      Positions debugTarget = targetPositions;
 
       patternSwitched = false; // after we've called the pattern function above, we can reset this flag to false.
 
       // finally, take the steps necessary to move both axes to the target position in a coordinated manner and update the current position.
       currentPositions = orchestrateMotion(currentPositions, targetPositions);
+
+      if (g_debugStepStreaming)
+      {
+        emitPatternStepTelemetry(debugTarget, currentPositions, debugRestart);
+      }
 
 #pragma endregion AutomaticMode
     }
@@ -1585,6 +2035,91 @@ This region of code contains the different pattern generating functions.
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma region Patterns
+
+Positions pattern_SandScript(Positions current, bool restartPattern)
+{
+  if (!g_activeScript.loaded)
+  {
+    g_lastSandScriptEvalInputs = SandScriptEvalInputsSnapshot();
+    return current;
+  }
+
+  if (restartPattern)
+  {
+    resetActiveScriptRuntime();
+  }
+
+  const uint32_t evalIntervalUs = g_sandScriptIdleBackoffActive ? SANDSCRIPT_IDLE_EVAL_INTERVAL_US : SANDSCRIPT_MIN_STEP_INTERVAL_US;
+  if (g_sandScriptStepTimer < evalIntervalUs)
+  {
+    if (g_sandScriptIdleBackoffActive)
+    {
+      delay(1);
+    }
+    else
+    {
+      yield();
+    }
+    return current;
+  }
+  g_sandScriptIdleBackoffActive = false;
+  g_sandScriptStepTimer = 0;
+
+  Positions next = evalPatternScript(g_activeScript.program, g_activeScript.runtime, current, restartPattern);
+
+  SandScriptEvalInputsSnapshot snapshot;
+  snapshot.radiusCm = convertStepsToMM(static_cast<float>(current.radial)) / 10.0f;
+  snapshot.angleDeg = convertStepsToDegrees(current.angular);
+  snapshot.rev = g_activeScript.runtime.unwrappedAngleDeg / 360.0f;
+  snapshot.steps = (g_activeScript.runtime.stepCounter > 0) ? (g_activeScript.runtime.stepCounter - 1) : 0;
+  uint32_t nowMs = millis();
+  if (nowMs >= g_activeScript.runtime.startMillis)
+  {
+    snapshot.timeMs = nowMs - g_activeScript.runtime.startMillis;
+  }
+  else
+  {
+    snapshot.timeMs = 0;
+  }
+  snapshot.start = restartPattern;
+  snapshot.valid = true;
+  g_lastSandScriptEvalInputs = snapshot;
+
+  next.radial = constrain(next.radial, 0, MAX_R_STEPS);
+  next.angular = modulus(next.angular, STEPS_PER_A_AXIS_REV);
+
+  const int radialDelta = abs(next.radial - current.radial);
+  const int angularDelta = abs(findShortestPathToPosition(current.angular, next.angular, STEPS_PER_A_AXIS_REV));
+  const bool noApparentMotion = (radialDelta <= SANDSCRIPT_IDLE_STEP_TOLERANCE_STEPS) && (angularDelta <= SANDSCRIPT_IDLE_STEP_TOLERANCE_STEPS);
+
+  if (noApparentMotion)
+  {
+    if (g_sandScriptIdleSpinCount < SANDSCRIPT_IDLE_SPIN_THRESHOLD)
+    {
+      g_sandScriptIdleSpinCount++;
+    }
+    else
+    {
+      g_sandScriptIdleSpinCount = SANDSCRIPT_IDLE_SPIN_THRESHOLD; // clamp
+      g_sandScriptIdleBackoffActive = true;
+      if (!g_sandScriptIdleNotified)
+      {
+        bleConfig.notifyStatus("[SCRIPT] idle backoff engaged");
+        g_sandScriptIdleNotified = true;
+      }
+    }
+  }
+  else
+  {
+    if (g_sandScriptIdleNotified)
+    {
+      bleConfig.notifyStatus("[SCRIPT] idle cleared");
+      g_sandScriptIdleNotified = false;
+    }
+    g_sandScriptIdleSpinCount = 0;
+  }
+  return next;
+}
 
 /**
  * @brief Pattern: Simple Spiral. Generates the next target position for drawing a simple inward and outward spiral.

@@ -1,4 +1,7 @@
 #include "BLEConfigServer.h"
+#include "PatternScript.h"
+
+static const uint32_t SCRIPT_TRANSFER_TIMEOUT_MS = 5000;
 
 BLEConfigServer::BLEConfigServer() {}
 
@@ -62,6 +65,13 @@ void BLEConfigServer::begin(ISGConfigListener *listener) {
     NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::READ);
   _commandChar->setValue("READY");
   _commandChar->setCallbacks(new CommandCallbacks(this));
+
+  // Script chunk characteristic (binary-safe write sink for DSL source)
+  _scriptChar = _service->createCharacteristic(
+    SG_SCRIPT_CHAR_UUID,
+    NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+  _scriptChar->setValue("");
+  _scriptChar->setCallbacks(new ScriptCallbacks(this));
 
   _service->start();
   NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
@@ -197,6 +207,31 @@ void BLEConfigServer::disconnectAll(const char *reasonTag) {
 }
 
 void BLEConfigServer::_watchdog() {
+  if (_scriptActive && _scriptLastChunkMs > 0) {
+    uint32_t now = millis();
+    if ((now - _scriptLastChunkMs) > SCRIPT_TRANSFER_TIMEOUT_MS) {
+      String msg = String("[SCRIPT] ERR timeout after ") + String(static_cast<unsigned long>(now - _scriptLastChunkMs)) + "ms";
+      notifyStatus(msg);
+      if (_listener) _listener->onPatternScriptStatus(msg);
+      _resetScriptTransfer("timeout", false);
+    }
+  }
+  if (_scriptActive && _scriptProgressDirty) {
+    uint32_t now = millis();
+    if (_scriptLastProgressNotifyMs == 0 || (now - _scriptLastProgressNotifyMs) >= 750) {
+      _scriptLastProgressNotifyMs = now;
+      _scriptProgressDirty = false;
+      if (_scriptExpectedLen > 0) {
+        uint32_t percent = static_cast<uint32_t>((_scriptReceivedLen * 100UL) / _scriptExpectedLen);
+        String msg = String("[SCRIPT] PROGRESS recv=") +
+                     String(static_cast<unsigned long>(_scriptReceivedLen)) +
+                     "/" + String(static_cast<unsigned long>(_scriptExpectedLen)) +
+                     " (" + String(percent) + "%)";
+        notifyStatus(msg);
+        if (_listener) _listener->onPatternScriptStatus(msg);
+      }
+    }
+  }
   // If no active connections and not advertising, attempt restart.
   NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
   NimBLEServer *srv = NimBLEDevice::getServer();
@@ -252,14 +287,21 @@ void BLEConfigServer::_applyCommandWrite(const std::string &valRaw) {
   auto rtrim=[&](std::string &s){ while(!s.empty() && isspace((unsigned char)s.back())) s.pop_back();};
   ltrim(raw); rtrim(raw);
   std::string token = raw;
+  std::string payload;
   // For future args support: split at first space
   size_t sp = raw.find(' ');
-  if (sp != std::string::npos) token = raw.substr(0, sp);
+  if (sp != std::string::npos) {
+    token = raw.substr(0, sp);
+    payload = raw.substr(sp + 1);
+    auto trimPayload=[&](std::string &s){ while(!s.empty() && isspace((unsigned char)s.front())) s.erase(s.begin()); while(!s.empty() && isspace((unsigned char)s.back())) s.pop_back(); };
+    trimPayload(payload);
+  }
   for(char &c : token) c = toupper((unsigned char)c);
   if (_commandChar) {
     // Echo back sanitized token (could also include OK/ERR later)
     _commandChar->setValue(token);
   }
+  notifyStatus(String("[CMD] RX ") + token.c_str());
   if (_listener) {
     _listener->onCommandReceived(String(token.c_str()), valRaw);
   }
@@ -268,6 +310,137 @@ void BLEConfigServer::_applyCommandWrite(const std::string &valRaw) {
     restartAdvertising("cmd");
   } else if (token == "BLEDROP") {
     disconnectAll("cmd");
+  } else if (token.rfind("SCRIPT_", 0) == 0) {
+    _handleScriptCommand(token, payload);
+  }
+}
+
+void BLEConfigServer::_handleScriptCommand(const std::string &token, const std::string &payload) {
+  const size_t maxLen = PSG_MAX_SCRIPT_CHARS;
+  auto emitListenerStatus = [&](const String &msg){ if (_listener) _listener->onPatternScriptStatus(msg); };
+  if (token == "SCRIPT_BEGIN") {
+    if (payload.empty()) {
+      notifyStatus("[SCRIPT] ERR begin missing length");
+      emitListenerStatus("[SCRIPT] ERR begin missing length");
+      return;
+    }
+    const char *buf = payload.c_str();
+    char *endPtr = nullptr;
+    long expected = strtol(buf, &endPtr, 10);
+    while (endPtr && *endPtr != '\0' && isspace((unsigned char)*endPtr)) ++endPtr;
+    int slot = -1;
+    if (endPtr && *endPtr != '\0') {
+      char *slotEnd = nullptr;
+      slot = static_cast<int>(strtol(endPtr, &slotEnd, 10));
+    }
+    if (expected <= 0) {
+      notifyStatus("[SCRIPT] ERR begin length");
+      emitListenerStatus("[SCRIPT] ERR begin length");
+      return;
+    }
+    if (expected > static_cast<long>(maxLen)) {
+      notifyStatus(String("[SCRIPT] ERR too long len=") + String(expected));
+      emitListenerStatus(String("[SCRIPT] ERR too long len=") + String(expected));
+      return;
+    }
+    if (_scriptActive || _scriptReceivedLen > 0) {
+      _resetScriptTransfer("preempt", false);
+    }
+    _scriptBuffer.clear();
+    _scriptBuffer.reserve(static_cast<size_t>(expected));
+    _scriptExpectedLen = static_cast<size_t>(expected);
+    _scriptReceivedLen = 0;
+    _scriptTargetSlot = slot;
+    _scriptActive = true;
+    _scriptLastChunkMs = millis();
+    _scriptProgressDirty = true;
+    _scriptLastProgressNotifyMs = millis();
+    String msg = String("[SCRIPT] BEGIN len=") + String(expected) + " slot=" + String(slot);
+    notifyStatus(msg);
+    emitListenerStatus(msg);
+    return;
+  }
+  if (token == "SCRIPT_ABORT") {
+    if (_scriptActive || _scriptReceivedLen > 0) {
+      _resetScriptTransfer("abort");
+    } else {
+      notifyStatus("[SCRIPT] WARN abort no-session");
+      emitListenerStatus("[SCRIPT] WARN abort no-session");
+    }
+    return;
+  }
+  if (token == "SCRIPT_END") {
+    notifyStatus("[SCRIPT] CMD END");
+    if (!_scriptActive) {
+      notifyStatus("[SCRIPT] ERR end without begin");
+      emitListenerStatus("[SCRIPT] ERR end without begin");
+      return;
+    }
+    emitListenerStatus("[SCRIPT] CMD END");
+    _finalizeScriptTransfer();
+    return;
+  }
+  if (token == "SCRIPT_STATUS") {
+    String msg = String("[SCRIPT] STATE active=") + String(_scriptActive ? 1 : 0) +
+                 " recv=" + String(static_cast<unsigned long>(_scriptReceivedLen)) +
+                 " exp=" + String(static_cast<unsigned long>(_scriptExpectedLen));
+    notifyStatus(msg);
+    emitListenerStatus(msg);
+    return;
+  }
+  notifyStatus(String("[SCRIPT] ERR unknown cmd ") + token.c_str());
+  emitListenerStatus(String("[SCRIPT] ERR unknown cmd ") + token.c_str());
+}
+
+void BLEConfigServer::_resetScriptTransfer(const char *reasonTag, bool notify) {
+  bool hadProgress = _scriptActive || _scriptReceivedLen > 0;
+  if (notify && hadProgress) {
+    String msg = String("[SCRIPT] RESET reason=") + (reasonTag ? reasonTag : "?");
+    this->notifyStatus(msg);
+    if (_listener) _listener->onPatternScriptStatus(msg);
+  }
+  _scriptBuffer.clear();
+  _scriptExpectedLen = 0;
+  _scriptReceivedLen = 0;
+  _scriptTargetSlot = -1;
+  _scriptActive = false;
+  _scriptLastChunkMs = 0;
+  _scriptProgressDirty = false;
+  _scriptLastProgressNotifyMs = 0;
+}
+
+void BLEConfigServer::_finalizeScriptTransfer() {
+  if (!_scriptActive) {
+    notifyStatus("[SCRIPT] ERR finalize inactive");
+    if (_listener) _listener->onPatternScriptStatus("[SCRIPT] ERR finalize inactive");
+    return;
+  }
+  if (_scriptReceivedLen != _scriptExpectedLen) {
+    String msg = String("[SCRIPT] ERR size mismatch recv=") +
+                 String(static_cast<unsigned long>(_scriptReceivedLen)) +
+                 " exp=" + String(static_cast<unsigned long>(_scriptExpectedLen));
+    notifyStatus(msg);
+    if (_listener) _listener->onPatternScriptStatus(msg);
+    _resetScriptTransfer("size", false);
+    return;
+  }
+  std::string script;
+  script.swap(_scriptBuffer);
+  size_t len = _scriptExpectedLen;
+  int slot = _scriptTargetSlot;
+  _scriptExpectedLen = 0;
+  _scriptReceivedLen = 0;
+  _scriptTargetSlot = -1;
+  _scriptActive = false;
+  _scriptLastChunkMs = 0;
+  _scriptProgressDirty = false;
+  _scriptLastProgressNotifyMs = 0;
+  notifyStatus(String("[SCRIPT] FINALIZE len=") + String(static_cast<unsigned long>(len)));
+  String msg = String("[SCRIPT] READY len=") + String(static_cast<unsigned long>(len));
+  notifyStatus(msg);
+  if (_listener) {
+    _listener->onPatternScriptStatus(msg);
+    _listener->onPatternScriptReceived(script, slot);
   }
 }
 
@@ -294,4 +467,29 @@ void BLEConfigServer::RunCallbacks::onWrite(NimBLECharacteristic *c, NimBLEConnI
 void BLEConfigServer::CommandCallbacks::onWrite(NimBLECharacteristic *c, NimBLEConnInfo &info) {
   (void)info;
   _parent->_applyCommandWrite(c->getValue());
+}
+
+void BLEConfigServer::ScriptCallbacks::onWrite(NimBLECharacteristic *c, NimBLEConnInfo &info) {
+  (void)info;
+  const std::string chunk = c->getValue();
+  size_t chunkLen = chunk.size();
+  if (chunkLen == 0) {
+    return;
+  }
+  if (!_parent->_scriptActive) {
+    _parent->notifyStatus("[SCRIPT] WARN chunk without begin");
+    if (_parent->_listener) _parent->_listener->onPatternScriptStatus("[SCRIPT] WARN chunk without begin");
+    return;
+  }
+  if (_parent->_scriptReceivedLen + chunkLen > _parent->_scriptExpectedLen) {
+    String msg = String("[SCRIPT] ERR overflow chunk=") + String(static_cast<unsigned long>(chunkLen));
+    _parent->notifyStatus(msg);
+    if (_parent->_listener) _parent->_listener->onPatternScriptStatus(msg);
+    _parent->_resetScriptTransfer("overflow", false);
+    return;
+  }
+  _parent->_scriptBuffer.append(chunk.data(), chunkLen);
+  _parent->_scriptReceivedLen += chunkLen;
+  _parent->_scriptLastChunkMs = millis();
+  _parent->_scriptProgressDirty = true;
 }
