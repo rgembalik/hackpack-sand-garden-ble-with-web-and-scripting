@@ -59,6 +59,8 @@
       border-radius: 50%;
       position: absolute;
       box-shadow: 0 0 6px 2px rgba(255, 122, 0, 0.35), inset 0 0 4px rgba(255, 122, 0, 0.4);
+      pointer-events: none; /* don't block interactions with the tray */
+      z-index: 5; /* sit above tray overlay */
     }
 
     .sg-screw::after {
@@ -309,11 +311,19 @@
           <div class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow relative">
             <h2 class="text-lg font-semibold mb-3">Visualizer</h2>
             <div class="relative">
-              <!-- Screws around tray -->
-              <div class="sg-screw" style="top:-12px; left:50%; transform:translateX(-50%);"></div>
-              <div class="sg-screw" style="bottom:-12px; left:50%; transform:translateX(-50%);"></div>
-              <div class="sg-screw" style="left:-12px; top:50%; transform:translateY(-50%);"></div>
-              <div class="sg-screw" style="right:-12px; top:50%; transform:translateY(-50%);"></div>
+              <!-- Screws around tray (12) - positioned with percentages for responsiveness -->
+              <div class="sg-screw" style="top:2%; left:50%; transform:translate(-50%,-50%);"></div>
+              <div class="sg-screw" style="top:8%; left:78%; transform:translate(-50%,-50%);"></div>
+              <div class="sg-screw" style="top:28%; left:94%; transform:translate(-50%,-50%);"></div>
+              <div class="sg-screw" style="top:50%; left:100%; transform:translate(-50%,-50%);"></div>
+              <div class="sg-screw" style="top:72%; left:94%; transform:translate(-50%,-50%);"></div>
+              <div class="sg-screw" style="top:92%; left:78%; transform:translate(-50%,-50%);"></div>
+              <div class="sg-screw" style="top:98%; left:50%; transform:translate(-50%,-50%);"></div>
+              <div class="sg-screw" style="top:92%; left:22%; transform:translate(-50%,-50%);"></div>
+              <div class="sg-screw" style="top:72%; left:6%; transform:translate(-50%,-50%);"></div>
+              <div class="sg-screw" style="top:50%; left:0%; transform:translate(-50%,-50%);"></div>
+              <div class="sg-screw" style="top:28%; left:6%; transform:translate(-50%,-50%);"></div>
+              <div class="sg-screw" style="top:8%; left:22%; transform:translate(-50%,-50%);"></div>
               <div class="sand-tray shadow-sand" x-ref="tray">
                 <canvas x-ref="canvas" class="pattern-canvas"></canvas>
                 <canvas x-ref="debugCanvas" class="pattern-debug-canvas"></canvas>
@@ -762,12 +772,52 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           this.ensurePathBuffer();
           this.clearPath();
           this.renderFrame();
+          // Reposition screws so they stay outside the circular tray
+          try { this.positionScrews(); } catch (_) { }
           if (this.debugCtx) {
             if (this.debugPoints.length) {
               this.redrawDebugTrail();
             } else {
               this.debugCtx.clearRect(0, 0, size, size);
             }
+          }
+        },
+
+        // Position screw elements (.sg-screw) around the tray so they don't overlap the circular
+        // visualization. Uses the tray bounding box and places screws at trayRadius + gap.
+        positionScrews() {
+          try {
+            const tray = this.$refs.tray;
+            if (!tray) return;
+            const parent = tray.parentElement; // wrapper with position:relative
+            if (!parent) return;
+            const screws = parent.querySelectorAll('.sg-screw');
+            if (!screws || !screws.length) return;
+            const trayRect = tray.getBoundingClientRect();
+            const parentRect = parent.getBoundingClientRect();
+            // center relative to parent (px)
+            const cx = (trayRect.left - parentRect.left) + trayRect.width / 2;
+            const cy = (trayRect.top - parentRect.top) + trayRect.height / 2;
+            // tray visual radius in px (uses same factor as canvas drawing)
+            const trayRadiusPx = Math.min(trayRect.width, trayRect.height) * this.trayRadiusFactor;
+            // gap to ensure screws sit outside the circular tray; scales with tray size
+            const gap = Math.max(12, Math.round(Math.min(trayRect.width, trayRect.height) * 0.06));
+            const placeR = trayRadiusPx + gap;
+            const count = screws.length;
+            for (let i = 0; i < count; i++) {
+              const angleDeg = -90 + (360 * i / count); // start at top and go clockwise
+              const a = angleDeg * Math.PI / 180;
+              const x = Math.round(cx + placeR * Math.cos(a));
+              const y = Math.round(cy + placeR * Math.sin(a));
+              const el = screws[i];
+              // set pixel positions relative to parent; keep translate(-50%,-50%) for centering
+              el.style.left = x + 'px';
+              el.style.top = y + 'px';
+              if (!el.style.transform) el.style.transform = 'translate(-50%,-50%)';
+            }
+          } catch (err) {
+            // non-fatal
+            console.warn('positionScrews error', err);
           }
         },
         log(msg) {
