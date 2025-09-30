@@ -44,6 +44,7 @@ enum PSGOp : uint8_t {
   PSG_OP_COS   = 0x17,
   PSG_OP_ABS   = 0x18,
   PSG_OP_CLAMP = 0x19,
+  PSG_OP_PINGPONG = 0x1B,
   PSG_OP_SIGN  = 0x1A,
   PSG_OP_END   = 0xFF
 };

@@ -358,19 +358,20 @@
                 x-text="showDSLDetails ? 'Hide Details' : 'Show Details'"></button>
             </div>
             <p class="text-xs text-gray-400 leading-relaxed">Assign <code
-                class='font-mono text-sg-accent'>next_radius</code>, <code
-                class='font-mono text-sg-accent'>next_angle</code>, <code
-                class='font-mono text-sg-accent'>delta_radius</code>, <code
-                class='font-mono text-sg-accent'>delta_angle</code>. Inputs: <code class='font-mono'>radius</code>,
-              <code class='font-mono'>angle</code>, <code class='font-mono'>steps</code>, <code
-                class='font-mono'>time</code>, <code class='font-mono'>start</code>, <code
-                class='font-mono'>rev</code><span class="text-gray-500">(legacy)</span>. Operators: <code
-                class='font-mono'>+ - * / %</code>. Functions: <code class='font-mono'>sin cos abs clamp sign</code>.
-              Trig
-              uses degrees. <span class="text-sg-accent/80">steps</span> = evaluation count since start (0-based), <span
-                class="text-sg-accent/80">time</span> = ms since script start (approx in browser). <span
-                class='text-sg-accent/80'>a % b</span> returns remainder (b==0 → 0).
-            </p>
+                        class='font-mono text-sg-accent'>next_radius</code>, <code
+                        class='font-mono text-sg-accent'>next_angle</code>, <code
+                        class='font-mono text-sg-accent'>delta_radius</code>, <code
+                        class='font-mono text-sg-accent'>delta_angle</code>. Inputs: <code class='font-mono'>radius</code>,
+                      <code class='font-mono'>angle</code>, <code class='font-mono'>steps</code>, <code
+                        class='font-mono'>time</code>, <code class='font-mono'>start</code>, <code
+                        class='font-mono'>rev</code><span class="text-gray-500">(legacy)</span>. Operators: <code
+                        class='font-mono'>+ - * / %</code>. Functions: <code class='font-mono'>sin cos abs clamp sign pingpong</code>.
+                      Trig
+                      uses degrees. <span class="text-sg-accent/80">steps</span> = evaluation count since start (0-based), <span
+                        class="text-sg-accent/80">time</span> = ms since script start (approx in browser). <span
+                        class='text-sg-accent/80'>a % b</span> returns remainder (b==0 → 0). The function pingpong(value,max) returns a
+                      triangular/ping-pong waveform between 0 and max (max must be provided).
+                    </p>
             <div
               class="text-xs text-gray-400 bg-gray-900/50 border border-gray-700/60 rounded px-3 py-2 flex items-center gap-2">
               <span class="font-medium text-sg-accent/80">Live Preview</span>
@@ -588,10 +589,10 @@
 # no easing at the edge
 
 # sign(-10...10)
-dir = -sign(steps % 21 - 10)
+r = pingpong(steps, 9)
 
 delta_angle = 3
-delta_radius = 1 * dir`,
+next_radius = 1 + r`,
         compileErrors: [],
         compiledScript: null,
         // Continuous revolution tracking for DSL (rev variable)
@@ -615,10 +616,10 @@ delta_radius = 1 * dir`,
 # no easing at the edge
 
 # sign(-10...10)
-dir = -sign(steps % 21 - 10)
+r = pingpong(steps, 9)
 
 delta_angle = 3
-delta_radius = 1 * dir`
+next_radius = 1 + r`
           },
           {
             final: true,
@@ -2282,11 +2283,11 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
     }
 
     // -------- DSL Compiler & Evaluator (Unified) --------
-    const DSG_OP = { CONST: 'CONST', LOAD: 'LOAD', ADD: 'ADD', SUB: 'SUB', MUL: 'MUL', DIV: 'DIV', MOD: 'MOD', NEG: 'NEG', SIN: 'SIN', COS: 'COS', ABS: 'ABS', CLAMP: 'CLAMP', SIGN: 'SIGN', END: 'END' };
+  const DSG_OP = { CONST: 'CONST', LOAD: 'LOAD', ADD: 'ADD', SUB: 'SUB', MUL: 'MUL', DIV: 'DIV', MOD: 'MOD', NEG: 'NEG', SIN: 'SIN', COS: 'COS', ABS: 'ABS', CLAMP: 'CLAMP', SIGN: 'SIGN', PINGPONG: 'PINGPONG', END: 'END' };
     // Added synthetic inputs: rev (angle/360 unwrapped), steps (evaluation counter), time (ms since script start)
     const DSG_INPUTS = ['radius', 'angle', 'start', 'rev', 'steps', 'time'];
     const DSG_OUTPUTS = ['next_radius', 'next_angle', 'delta_radius', 'delta_angle'];
-    const DSG_FUNCS = { sin: 1, cos: 1, abs: 1, clamp: 3, sign: 1 };
+  const DSG_FUNCS = { sin: 1, cos: 1, abs: 1, clamp: 3, sign: 1, pingpong: 2 };
     const DSG_CONSTS = {};
 
     function tokenizeDSL(source) {
@@ -2337,6 +2338,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
         return output;
       }
       function rpnToBytecode(rpn, definedLocals) { const bc = []; for (const tk of rpn) { if (!tk) continue; if (tk.type === 'NUMBER') { bc.push({ op: DSG_OP.CONST, v: tk.value }); continue; } if (tk.type === 'IDENT') { const nm = tk.value; if (DSG_CONSTS[nm] != null) { bc.push({ op: DSG_OP.CONST, v: DSG_CONSTS[nm] }); continue; } if (DSG_FUNCS[nm] != null) { switch (nm) { case 'sin': bc.push({ op: DSG_OP.SIN }); break; case 'cos': bc.push({ op: DSG_OP.COS }); break; case 'abs': bc.push({ op: DSG_OP.ABS }); break; case 'clamp': bc.push({ op: DSG_OP.CLAMP }); break; case 'sign': bc.push({ op: DSG_OP.SIGN }); break; } continue; } if (DSG_INPUTS.includes(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (DSG_OUTPUTS.includes(nm)) { if (!definedOutputs.has(nm)) { errors.push({ message: 'Output ' + nm + ' used before it is assigned earlier in script', pos: tk.pos }); } bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (definedLocals.has(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } errors.push({ message: 'Unknown identifier ' + nm, pos: tk.pos }); continue; } if (['+', '-', '*', '/', '%'].includes(tk.type)) { bc.push({ op: { '+': DSG_OP.ADD, '-': DSG_OP.SUB, '*': DSG_OP.MUL, '/': DSG_OP.DIV, '%': DSG_OP.MOD }[tk.type] }); continue; } if (tk.type === 'NEG') { bc.push({ op: DSG_OP.NEG }); continue; } } bc.push({ op: DSG_OP.END }); return bc; }
+    function rpnToBytecode(rpn, definedLocals) { const bc = []; for (const tk of rpn) { if (!tk) continue; if (tk.type === 'NUMBER') { bc.push({ op: DSG_OP.CONST, v: tk.value }); continue; } if (tk.type === 'IDENT') { const nm = tk.value; if (DSG_CONSTS[nm] != null) { bc.push({ op: DSG_OP.CONST, v: DSG_CONSTS[nm] }); continue; } if (DSG_FUNCS[nm] != null) { switch (nm) { case 'sin': bc.push({ op: DSG_OP.SIN }); break; case 'cos': bc.push({ op: DSG_OP.COS }); break; case 'abs': bc.push({ op: DSG_OP.ABS }); break; case 'clamp': bc.push({ op: DSG_OP.CLAMP }); break; case 'sign': bc.push({ op: DSG_OP.SIGN }); break; case 'pingpong': bc.push({ op: DSG_OP.PINGPONG }); break; } continue; } if (DSG_INPUTS.includes(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (DSG_OUTPUTS.includes(nm)) { if (!definedOutputs.has(nm)) { errors.push({ message: 'Output ' + nm + ' used before it is assigned earlier in script', pos: tk.pos }); } bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (definedLocals.has(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } errors.push({ message: 'Unknown identifier ' + nm, pos: tk.pos }); continue; } if (['+', '-', '*', '/', '%'].includes(tk.type)) { bc.push({ op: { '+': DSG_OP.ADD, '-': DSG_OP.SUB, '*': DSG_OP.MUL, '/': DSG_OP.DIV, '%': DSG_OP.MOD }[tk.type] }); continue; } if (tk.type === 'NEG') { bc.push({ op: DSG_OP.NEG }); continue; } } bc.push({ op: DSG_OP.END }); return bc; }
       while (idx < tokens.length && !errors.length) {
         // skip stray EOLs
         while (peek() && peek().type === 'EOL') idx++;
@@ -2380,6 +2382,14 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
             case DSG_OP.ABS: { const a = st.pop(); st.push(Math.abs(a)); break; }
             case DSG_OP.CLAMP: { const c = st.pop(), b = st.pop(), a = st.pop(); st.push(Math.min(Math.max(a, b), c)); break; }
             case DSG_OP.SIGN: { const a = st.pop(); st.push(a > 0 ? 1 : (a < 0 ? -1 : 0)); break; }
+            case DSG_OP.PINGPONG: {
+              const max = st.pop(); const v = st.pop();
+              if (!isFinite(max) || max <= 0) { st.push(0); break; }
+              let t = v % (2 * max);
+              if (t < 0) t += 2 * max;
+              st.push(t <= max ? t : 2 * max - t);
+              break;
+            }
             case DSG_OP.END: return st.pop() || 0;
           }
         }

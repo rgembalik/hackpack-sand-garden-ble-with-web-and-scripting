@@ -162,7 +162,7 @@ static bool expectIdentifier(const std::string &id) {
 }
 
 static bool isFunctionName(const std::string &name) {
-  return name == "sin" || name == "cos" || name == "abs" || name == "clamp" || name == "sign";
+  return name == "sin" || name == "cos" || name == "abs" || name == "clamp" || name == "sign" || name == "pingpong";
 }
 
 static uint8_t maskForOutput(const std::string &name) {
@@ -179,11 +179,13 @@ static PSGOp functionToOp(const std::string &fn) {
   if (fn == "abs") return PSG_OP_ABS;
   if (fn == "clamp") return PSG_OP_CLAMP;
   if (fn == "sign") return PSG_OP_SIGN;
+  if (fn == "pingpong") return PSG_OP_PINGPONG;
   return PSG_OP_END;
 }
 
 static uint8_t expectedArgs(const std::string &fn) {
   if (fn == "clamp") return 3;
+  if (fn == "pingpong") return 2;
   return 1;
 }
 
@@ -412,7 +414,13 @@ static CompileResult toRPN(const std::vector<ExprToken> &tokens,
             argCount += 1;
           }
           uint8_t expected = expectedArgs(fnEntry.func);
-          if (argCount != expected) {
+          bool ok = false;
+          if (fnEntry.func == "pingpong") {
+            ok = (argCount == 1 || argCount == 2);
+          } else {
+            ok = (argCount == expected);
+          }
+          if (!ok) {
             return emitError(PSG_ERR_FUNC_ARGS, errMsg, "function argument mismatch", line);
           }
           RPNToken rt;
@@ -454,8 +462,14 @@ static CompileResult toRPN(const std::vector<ExprToken> &tokens,
     if (entry.type == StackEntry::Function) {
       uint8_t argCount = funcArgCounts.empty() ? 0 : funcArgCounts.back() + 1;
       if (!funcArgCounts.empty()) funcArgCounts.pop_back();
-      uint8_t expected = expectedArgs(entry.func);
-      if (argCount != expected) {
+      bool ok = false;
+      if (entry.func == "pingpong") {
+        ok = (argCount == 1 || argCount == 2);
+      } else {
+        uint8_t expected = expectedArgs(entry.func);
+        ok = (argCount == expected);
+      }
+      if (!ok) {
         return emitError(PSG_ERR_FUNC_ARGS, errMsg, "function argument mismatch", line);
       }
       RPNToken rt;
@@ -773,6 +787,21 @@ Positions evalPatternScript(const PatternScript &ps, PatternScriptRuntime &rt, c
         case PSG_OP_ABS: {
           float a = stack[--sp];
           stack[sp++] = fabsf(a);
+          break;
+        }
+        case PSG_OP_PINGPONG: {
+          // expects two args on stack: value, max -> returns triangular/pingpong between 0 and max
+          float maxV = stack[--sp];
+          float v = stack[--sp];
+          if (!isfinite(maxV) || maxV <= 0.0f) {
+            stack[sp++] = 0.0f;
+            break;
+          }
+          float period = 2.0f * maxV;
+          float t = fmodf(v, period);
+          if (t < 0.0f) t += period;
+          float out = (t <= maxV) ? t : (2.0f * maxV - t);
+          stack[sp++] = out;
           break;
         }
         case PSG_OP_CLAMP: {

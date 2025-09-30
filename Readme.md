@@ -44,7 +44,7 @@ SandScript is a compact math Domain Specific Language (DSL) that produces the ne
 
 Assign any of these outputs to drive motion (values are always in cm/deg): `next_radius`, `next_angle`, `delta_radius`, `delta_angle`. You can also create local temporary variables just by naming them.
 
-Supported functions: `sin`, `cos` (degree-based), `abs`, `clamp(value, min, max)`, `sign`. Operators: `+ - * / %` plus parentheses and unary `-`. Comments begin with `#`.
+Supported functions: `sin`, `cos` (degree-based), `abs`, `clamp(value, min, max)`, `sign`, `pingpong(value, max)`. Operators: `+ - * / %` plus parentheses and unary `-`. Comments begin with `#`.
 
 Example script:
 ```
@@ -54,6 +54,17 @@ target = clamp(wave * 10, 0, 10)
 next_radius = radius + (target - radius) * 0.25
 next_angle = angle + 12
 ```
+
+Additional examples (pingpong):
+```
+# oscillate radius between 0 and 6 cm based on step counter
+next_radius = pingpong(steps * 0.2, 6)
+
+# time-based bounce between 0 and 4
+next_radius = pingpong(time * 0.005, 4)
+```
+
+<!-- pingpong documented above within supported functions and examples -->
 
 ## Preview and upload from the browser
 1. Open `web-client.html` in Chrome or Edge (Web Bluetooth is required). No server is needed—double-clicking the file works.
