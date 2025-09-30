@@ -615,7 +615,7 @@
 # sign(-10...10)
 r = pingpong(steps/10, 9)
 
-delta_angle = -0.3
+delta_angle = 0.3
 next_radius = 1 + r`,
         compileErrors: [],
         compiledScript: null,
@@ -642,7 +642,7 @@ next_radius = 1 + r`,
 # sign(-10...10)
 r = pingpong(steps/10, 9)
 
-delta_angle = -0.3
+delta_angle = 0.3
 next_radius = 1 + r`
           },
           {
@@ -656,7 +656,7 @@ next_radius = 1 + r`
 dir = sin(steps * 180 / 15) 
 
 delta_angle = 5
-delta_radius = 1 * dir`
+next_radius = dir * 5 + 5`
           },
           {
             final: true,
