@@ -605,7 +605,7 @@
           { id: 8, type: 'builtin', name: 'Random Walk 1', short: 'rw arc', description: 'Random absolute targets (shortest angular path).', pointsTarget: 1800 },
           { id: 9, type: 'builtin', name: 'Random Walk 2', short: 'rw line', description: 'Random straight-line interpolation between points.', pointsTarget: 1800 },
           { id: 10, type: 'builtin', name: 'Accidental Butterfly', short: 'butterfly', description: 'Sinusoidally modulated spiral (butterfly).', pointsTarget: 4600 },
-          { id: 11, type: 'sandscript', name: 'Sandscript', short: 'script', description: 'Your custom Sandscript.', pointsTarget: 2000 }
+          { id: 11, type: 'sandscript', name: 'Sandscript', short: 'script', description: 'Your custom Sandscript.' }
         ],
         scriptPatternId: 11,
         // Sandscript state (internal variables still prefixed dsl for now)
@@ -2295,7 +2295,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           // --- Simulation driver ---
           const factory = patternFactories[id]; if (!factory) return [];
           const stepFn = factory();
-          const targetPoints = this.patternMeta[id - 1]?.pointsTarget || 2000;
+          const targetPoints = this.patternMeta[id - 1]?.pointsTarget || 20000;
           let current = { radial: 0, angular: 0 }; let restart = true; const pts = [];
           let safety = targetPoints * 4; // guardrail halt
           while (pts.length < targetPoints && safety-- > 0) {
