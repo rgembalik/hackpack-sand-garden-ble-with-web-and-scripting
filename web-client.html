@@ -647,6 +647,18 @@ next_radius = 1 + r`
           },
           {
             final: true,
+            name: 'Rose',
+            description: 'Rose-like pattern.',
+            code: `# Rose?
+
+tri = 0.5 * (1 - cos(rev*180 / 8))
+target = tri * 9 + 1 + sin(steps * 5) / 2
+
+next_radius = clamp(radius + (target - radius)*0.18, 0, 10) 
+delta_angle = 1.0 / radius`
+          },
+          {
+            final: true,
             name: 'PingPongSoftPetals',
             description: 'Softly eased petals using sinusoidal direction changes.',
             code: `# simple back and forth with the ball 
@@ -772,18 +784,14 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
               this.simulationRunning = false;
               // Reset timestamp so resume does not accumulate background dt
               this.lastTs = 0;
-              this.log('Simulation auto-paused (tab hidden)');
             }
           } else {
             if (this.wasSimulationRunningBeforeHide) {
               this.wasSimulationRunningBeforeHide = false;
               this.lastTs = 0; // ensure fresh timing
               this.simulationRunning = true;
-              this.log('Simulation auto-resumed (tab visible)');
               requestAnimationFrame(this.stepSimulation.bind(this));
-            } else {
-              this.log('Tab visible');
-            }
+            } 
           }
         },
         resizeCanvas() {
