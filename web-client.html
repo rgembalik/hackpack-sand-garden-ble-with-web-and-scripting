@@ -51,6 +51,16 @@
       background: #444;
     }
 
+    
+    .duration-1000 {
+      transition-duration: 1s !important;
+    }
+
+    .duration-10000 {
+      transition-duration: 10s !important;
+    }
+
+
     /* Screw indicators */
     .sg-screw {
       width: 18px;
@@ -135,6 +145,16 @@
           :class="running ? 'bg-red-600 hover:bg-red-500' : 'bg-sg-accent hover:bg-sg-accent/80'"
           class="px-4 py-2 rounded-md font-medium transition shadow-inner-glow focus:outline-none focus:ring-2 focus:ring-sg-accent/60">
           <span x-text="running ? 'Stop' : 'Run'"></span> </button>
+        <!-- Heartbeat indicator -->
+        <div class="relative">
+          <button @mouseenter="heartbeatHover=true" @mouseleave="heartbeatHover=false" class="w-9 h-9 rounded-full flex items-center justify-center bg-white text-gray-800 transition-colors"
+            :class="heartbeatActive ? 'bg-red-500 duration-1000' : 'bg-white duration-10000'" @click.prevent>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 text-current">
+              <path fill="currentColor" d="M12 21s-6.716-4.35-9.2-7.173C-1.1 8.598 4.25 3 8.4 5.4 10.2 6.5 12 9 12 9s1.8-2.5 3.6-3.6C19.75 3 25.1 8.598 21.2 13.827 18.716 16.65 12 21 12 21z" />
+            </svg>
+          </button>
+          <div x-show="heartbeatHover" x-text="formatClock(lastHeartbeat)" class="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs bg-gray-800 text-white rounded px-2 py-1 shadow"></div>
+        </div>
         <button @click="connect()"
           class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 transition font-medium focus:outline-none focus:ring-2 focus:ring-sg-accent/60"
           :disabled="connecting || connected" :class="(connecting||connected) ? 'opacity-60 cursor-not-allowed' : ''">
@@ -569,6 +589,10 @@
         trayRadiusFactor: 0.48,
         // Telemetry state
         joy: { a: 0, r: 0, mag: 0 }, lastState: { pat: null, auto: null, run: null, brt: null }, heartbeatCount: 0,
+  // Heartbeat UI state
+  heartbeatActive: false,
+  lastHeartbeat: null,
+  heartbeatHover: false,
         patternMeta: [
           // Added pointsTarget to guide simulation length (approx, can tweak)
           { id: 1, type: 'builtin', name: 'Simple Spiral', short: 'spiral', description: 'Outward then inward spiral path (firmware logic).', pointsTarget: 4500 },
@@ -589,9 +613,9 @@
 # no easing at the edge
 
 # sign(-10...10)
-r = pingpong(steps, 9)
+r = pingpong(steps/10, 9)
 
-delta_angle = 3
+delta_angle = -0.3
 next_radius = 1 + r`,
         compileErrors: [],
         compiledScript: null,
@@ -616,9 +640,9 @@ next_radius = 1 + r`,
 # no easing at the edge
 
 # sign(-10...10)
-r = pingpong(steps, 9)
+r = pingpong(steps/10, 9)
 
-delta_angle = 3
+delta_angle = -0.3
 next_radius = 1 + r`
           },
           {
@@ -1031,7 +1055,12 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           } else if (txt.startsWith('STEP ')) {
             this.handleStepTelemetry(txt);
           } else if (txt === 'HB') {
-            this.heartbeatCount++; this.log('HB ' + this.heartbeatCount);
+            // Heartbeat: do not log to event log to avoid noise. Show heartbeat icon pulse and record timestamp.
+            this.heartbeatCount++;
+            this.lastHeartbeat = Date.now();
+            // Trigger a brief visual pulse on the heart icon
+            this.heartbeatActive = true;
+            setTimeout(() => { this.heartbeatActive = false; }, 2000);
           } else {
             this.log('TL ' + txt);
           }

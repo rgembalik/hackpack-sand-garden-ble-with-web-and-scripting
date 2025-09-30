@@ -284,16 +284,22 @@ struct SandScriptPreset {
 
 static const SandScriptPreset kSandScriptPresets[] = {
   {
-    "BloomSpiral",
-    "# Sand garden bloom spiral\n"
-    "next_radius = clamp(radius + 0.18 * sign(sin(angle + rev * 45)), 0.6, 8.3)\n"
-    "next_angle = angle + 18 + 10 * sin(rev * 60)\n"
+    "PingPongSharpPetals",
+    "# simple back and forth with the ball,\n"
+    "# no easing at the edge\n\n"
+    "# sign(-10...10)\n"
+    "r = pingpong(steps, 9)\n\n"
+    "delta_angle = 3\n"
+    "next_radius = 1 + r\n"
   },
   {
-    "LotusOrbit",
-    "# Gentle orbiting flower\n"
-    "delta_radius = 0.4 * sin(rev * 180)\n"
-    "delta_angle = 24 + 12 * sin(rev * 90)\n"
+    "PingPongSoftPetals",
+    "# simple back and forth with the ball \n"
+    "# with sinusoidal easing\n\n"
+    "# change direction every 15 steps\n"
+    "dir = sin(steps * 180 / 15)\n\n"
+    "delta_angle = 5\n"
+    "delta_radius = 1 * dir\n"
   }
 };
 
@@ -687,23 +693,6 @@ static void setRunLocal(bool r)
   bleConfig.notifyStatus(String("[RUN] state=") + (r ? "STARTED" : "STOPPED"));
 }
 
-// Telemetry emission helpers
-static void sendJoystickTelemetry(int a, int r)
-{
-  // Only send if delta big enough, sign change, or endpoints
-  bool sigChange = (abs(a - telemetry.lastSentJoyA) >= JOY_DELTA_THRESHOLD) || (a == 0 && telemetry.lastSentJoyA != 0) || (abs(a) >= 95 && abs(telemetry.lastSentJoyA) < 95);
-  bool sigChangeR = (abs(r - telemetry.lastSentJoyR) >= JOY_DELTA_THRESHOLD) || (r == 0 && telemetry.lastSentJoyR != 0) || (abs(r) >= 95 && abs(telemetry.lastSentJoyR) < 95);
-  if (!(sigChange || sigChangeR))
-    return;
-  telemetry.lastSentJoyA = a;
-  telemetry.lastSentJoyR = r;
-  int mag = max(abs(a), abs(r));
-  // Include raw analog values so we can inspect non-linearity and offsets
-  String line = "JOY a=" + String(a) + " r=" + String(r) + " mag=" + String(mag);
-  bleConfig.notifyTelemetry(line);
-  bleConfig.notifyStatus("[JOY] " + line); // mirrored in status with tag for visibility
-}
-
 static void sendStateTelemetry()
 {
   // Aggregate snapshot
@@ -1094,8 +1083,6 @@ void loop()
   // Always read joystick once per outer loop and emit telemetry (throttled inside helper)
   joystickValues = readJoystick();
 
-  sendJoystickTelemetry(joystickValues.angular, joystickValues.radial);
-
   if (runPattern)
   {
 #pragma region Running
@@ -1427,7 +1414,6 @@ void moveToPosition(long angularSteps, long radialSteps)
     {
       lastJoyPoll = now;
       Positions tmp = readJoystick();
-      sendJoystickTelemetry(tmp.angular, tmp.radial);
     }
   }
 }

@@ -117,6 +117,80 @@ next_radius = pingpong(time * 0.005, 4)
 
 Have fun building your own kinetic sand patterns! The combination of firmware, BLE, and SandScript gives you a friendly starting point without diving into the low-level motion code.
 
+## Embedding SandScript into the firmware (no BLE)
+
+If your board can't use BLE (or you prefer not to use the web client), you can embed SandScript patterns directly in the firmware and run them from the device using the joystick and button. The firmware already supports a small built-in preset table and a dedicated "SandScript" pattern slot — here is how to work with them.
+
+### Where the built-in scripts live
+
+- Open `sand-garden.ino` and look for the `kSandScriptPresets` table. Each entry is a simple { name, source } pair. Example entry:
+
+```
+{
+   "BloomSpiral",
+   "# Sand garden bloom spiral\n"
+   "next_radius = clamp(radius + 0.18 * sign(sin(angle + rev * 45)), 0.6, 8.3)\n"
+   "next_angle = angle + 18 + 10 * sin(rev * 60)\n"
+},
+```
+
+Add, remove or edit entries in this array to include any scripts you want compiled into the firmware. Presets are stored as C string literals, so escape newlines and keep the total script length under the compile-time limit (see `PSG_MAX_SCRIPT_CHARS` in `PatternScript.h`).
+
+### Default script on boot
+
+The sketch compiles the first preset at startup by calling `compileSandScriptPreset(0, ...)`. To change which embedded preset is activated on boot, change that index (presets are zero-based), and optionally select the SandScript pattern slot so it runs immediately:
+
+Example (edit in `setup()` near the existing preset init):
+
+```
+String presetInitErr;
+if (compileSandScriptPreset(1, presetInitErr)) { // load preset #2 from the array (zero-based)
+   // select the SandScript slot so the device runs it right away
+   currentPattern = SCRIPT_PATTERN_INDEX; // pick the dynamic SandScript slot
+   patternSwitched = true;                 // force a restart so the script starts from step 0
+}
+else {
+   // fallback/logging
+}
+```
+
+This approach avoids depending on BLE during boot — the script is compiled and the controller selects the script slot locally so you can start it with the joystick/button on the device.
+
+### Selecting and running embedded presets on the device
+
+- Pattern selection is available in the on-device selection UI (use the joystick). Push the radial axis up/down to increment/decrement the selected pattern. The LEDs show the current pattern number. When you reach the last pattern number, that slot is the SandScript slot (the sketch maps `SCRIPT_PATTERN_INDEX` to the SandScript runner).
+- Press the joystick button (single click) to start/stop the currently selected pattern. Long-press is used to abort homing early during boot.
+
+If you compiled a built-in preset at boot (see previous section), set `currentPattern = SCRIPT_PATTERN_INDEX` and press the joystick button to start it. If you want to switch between multiple embedded presets without BLE, you can either:
+
+- Edit the firmware and change which preset is compiled on boot (rebuild/upload).
+- Or add a simple local control hook in the sketch to cycle presets using a button event (example below). The example avoids BLE and prints status to `Serial` so it works on boards without BLE enabled:
+
+Example: compile-and-run preset on double-click (add to `setup()`):
+
+```
+// Example: double-click cycles to preset index 1
+button.attachDoubleClick([](){
+   String err;
+   if (compileSandScriptPreset(1, err)) { // preset index (zero-based)
+      currentPattern = SCRIPT_PATTERN_INDEX; // select sandscript slot
+      patternSwitched = true;
+      Serial.println("[SCRIPT] PRESET loaded: index=1");
+   } else {
+      Serial.println("[SCRIPT] PRESET_ERR: " + err);
+   }
+});
+```
+
+You can adapt the handler to cycle through preset indices, or map other button events. Keep the preset indices zero-based and ensure you don't exceed `SANDSCRIPT_PRESET_COUNT`.
+
+### Notes & limits
+
+- Presets compiled into the firmware are subject to the same compile/runtime limits as uploaded scripts: see `PatternScript.h` (`PSG_MAX_SCRIPT_CHARS`, `PSG_MAX_TOKENS`, etc.).
+- The SandScript slot is the last pattern in the array of built-in patterns. In the code it is exposed as `SCRIPT_PATTERN_INDEX` (1-based). Use that constant when you want the device to run the active script from firmware.
+- If you add many or long scripts you may increase flash usage; keep preset count and script size modest on smaller ESP32 flash sizes.
+
+
 [bluetooth]: .docs/bluetooth-connection.png "Bluetooth pairing prompt"
 [pattern-selection]: .docs/pattern-selection.png "Pattern selection list"
 [pattern-visualization]: .docs/pattern-visualization.png "Pattern visualizer"
