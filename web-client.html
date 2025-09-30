@@ -609,14 +609,14 @@
         ],
         scriptPatternId: 11,
         // Sandscript state (internal variables still prefixed dsl for now)
-        scriptSource: `# simple back and forth with the ball,
-# no easing at the edge
+        scriptSource: `# simple back and forth with the ball 
+# with sinusoidal easing
 
-# sign(-10...10)
-r = pingpong(steps/10, 9)
+# change direction every 15 steps
+dir = sin(steps * 180 / 15) 
 
-delta_angle = 0.3
-next_radius = 1 + r`,
+delta_angle = 5
+next_radius = dir * 5 + 5`,
         compileErrors: [],
         compiledScript: null,
         // Continuous revolution tracking for DSL (rev variable)
