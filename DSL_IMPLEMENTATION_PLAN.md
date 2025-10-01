@@ -28,6 +28,8 @@ Owner: (You)
 | `time` synthetic input | ✅ Done | Milliseconds since script start (web: performance.now baseline). |
 | Ephemeral local variables | ✅ Done | Any new identifier assigned becomes single-pass local. |
 | `sign()` function | ✅ Done | Enables arithmetic mirror / ping-pong patterns. |
+| `random()` function | ❌ Not yet | function to get random number between 0 and 1. |
+| `sqrt()` function | ❌ Not yet | function to calculate square root. |
 | Mirror arithmetic guidance | ✅ Done | Achieved via `dir = sign(cos(rev * 180))` pattern; no mode flag in DSL. |
 
 Legend: ✅ Completed / ⏳ Pending / 🚧 In Progress
@@ -453,7 +455,7 @@ ADD
 ## 19. Open Decisions (Updated)
 | Decision | Options |
 |----------|---------|
-| Include tan()/sqrt()/pow() in v0? | Default no; add when requested. |
+| Include tan()/pow() in v0? | Default no; add when requested. |
 | Output reference policy | Ordered references allowed (already implemented). |
 | Unit abstraction permanence | Lock cm/deg unless strong reason to revert. |
 | Add constants (pi, tau) | Deferred – reintroduce only if needed. |
@@ -464,6 +466,8 @@ ADD
 
 ## 20. Next Immediate Actions (v0.5.0)
 
+1. Add `sqrt()`
+1. Add `random()` (0-1 pseudoranom generator)
 
 ## 21. Deferred / Nice-to-haves
 1. Explore constant-pool compression or 16-bit literal packing to shrink large scripts.
