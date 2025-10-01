@@ -771,7 +771,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
         scriptUploadProgress: 0,
         scriptUploadStatus: '',
         scriptTargetSlot: '',
-        maxScriptBytes: 1024,
+        maxScriptBytes: 768,
         preferredScriptChunkSize: null,
         scriptWriteModePreference: 'withResponse',
         fmtNum(n) { if (n == null || !isFinite(n)) return '-'; return (Math.abs(n) < 0.001 ? n.toExponential(2) : n.toFixed(3)).replace(/\.0+$/, '').replace(/(\.[0-9]*?)0+$/, '$1'); },
