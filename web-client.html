@@ -5,6 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Sand Garden Controller</title>
+  <link rel="icon" type="image/x-icon" id="favicon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" />
   <!-- TailwindCSS v4 CDN (placeholder; update if hash changes) -->
   <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
   <script>
@@ -817,7 +818,49 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           this.regeneratePattern();
           this.setupScriptProcessing();
           this.scheduleScriptProcess(true);
+          // Start dynamic favicon updater
+          this.startFaviconUpdater();
           this.log('UI initialized');
+        },
+        startFaviconUpdater() {
+          // Update favicon every 3 seconds with current canvas state
+          this.faviconUpdateInterval = setInterval(() => {
+            this.updateFavicon();
+          }, 3000);
+          // Initial update after a brief delay to ensure canvas is rendered
+          setTimeout(() => this.updateFavicon(), 500);
+        },
+        updateFavicon() {
+          if (!this.canvas) return;
+          
+          try {
+            // Create a temporary canvas for the favicon
+            const faviconSize = 32; // Standard favicon size
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = faviconSize;
+            tempCanvas.height = faviconSize;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Draw the main canvas scaled down to favicon size
+            tempCtx.drawImage(this.canvas, 0, 0, faviconSize, faviconSize);
+            
+            // Convert to data URL (use JPEG for smaller size, with good quality)
+            const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.85);
+            
+            // Update the favicon link element
+            let favicon = document.getElementById('favicon');
+            if (!favicon) {
+              favicon = document.createElement('link');
+              favicon.id = 'favicon';
+              favicon.rel = 'icon';
+              favicon.type = 'image/jpeg';
+              document.head.appendChild(favicon);
+            }
+            favicon.href = dataUrl;
+          } catch (err) {
+            // Silent fail - canvas might not be ready or have cross-origin issues
+            console.warn('Favicon update failed:', err);
+          }
         },
         onVisibilityChange() {
           // Auto-pause simulation when tab becomes hidden to avoid large time deltas on return
