@@ -295,12 +295,12 @@ Pack small consts via 16-bit index to shared constant pool; not needed in v0.
 ## 8. Memory / Limits (Firmware) (revisit for locals/sign/temporal)
 | Item | Limit |
 |------|-------|
-| Max script length (chars) | 512 (fits small BLE upload, adjustable) |
-| Max tokens | 128 |
-| Max ops per assignment | 48 (tunable) |
-| Stack depth | 16 (verify still sufficient with clamp(sign()) nesting; adjust if temporal scripts push limits) |
-| Number of assignments | Up to 4 outputs + locals (locals counted toward op & token limits) |
-| Max locals | 8 |
+| Max script length (chars) | 1024 (fits small BLE upload, adjustable) |
+| Max tokens | 360 |
+| Max ops per assignment | 192 (tunable) |
+| Stack depth | 32 (verify still sufficient with clamp(sign()) nesting; adjust if temporal scripts push limits) |
+| Number of assignments | Up to 32 (outputs + locals combined) |
+| Max locals | 16 |
 
 If limits exceeded → error code (INVALID_TOO_LARGE).
 

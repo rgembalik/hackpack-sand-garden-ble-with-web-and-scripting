@@ -423,7 +423,7 @@
                         class='font-mono text-sg-accent'>delta_angle</code>. Inputs: <code class='font-mono'>radius</code>,
                       <code class='font-mono'>angle</code>, <code class='font-mono'>steps</code>, <code
                         class='font-mono'>time</code>, <code class='font-mono'>start</code>, <code
-                        class='font-mono'>rev</code><span class="text-gray-500">(legacy)</span>. Operators: <code
+                        class='font-mono'>rev</code>. Operators: <code
                         class='font-mono'>+ - * / %</code>. Functions: <code class='font-mono'>sin cos abs clamp sign pingpong</code>.
                       Trig
                       uses degrees. <span class="text-sg-accent/80">steps</span> = evaluation count since start (0-based), <span
@@ -771,7 +771,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
         scriptUploadProgress: 0,
         scriptUploadStatus: '',
         scriptTargetSlot: '',
-        maxScriptBytes: 512,
+        maxScriptBytes: 1024,
         preferredScriptChunkSize: null,
         scriptWriteModePreference: 'withResponse',
         fmtNum(n) { if (n == null || !isFinite(n)) return '-'; return (Math.abs(n) < 0.001 ? n.toExponential(2) : n.toFixed(3)).replace(/\.0+$/, '').replace(/(\.[0-9]*?)0+$/, '$1'); },
