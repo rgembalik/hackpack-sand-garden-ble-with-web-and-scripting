@@ -24,7 +24,7 @@ static const uint8_t PSG_MASK_DELTA_ANGLE    = 0x08;
 
 // Limits (align with implementation plan)
 static const uint16_t PSG_MAX_SCRIPT_CHARS   = 1024;
-static const uint8_t  PSG_MAX_TOKENS         = 360;
+static const uint16_t PSG_MAX_TOKENS         = 360;
 static const uint8_t  PSG_MAX_STACK_DEPTH    = 32;
 static const uint8_t  PSG_MAX_EXPR_BYTES     = 192; // per assignment expression (bytecode payload)
 static const uint8_t  PSG_MAX_ASSIGNMENTS    = 32; // outputs + locals combined
