@@ -835,11 +835,12 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           
           try {
             // Create a temporary canvas for the favicon
-            const faviconSize = 32; // Standard favicon size
+            const faviconSize = 64; // Standard favicon size
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = faviconSize;
             tempCanvas.height = faviconSize;
             const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.filter = 'brightness(60%) contrast(7)';
             
             // Draw the main canvas scaled down to favicon size
             tempCtx.drawImage(this.canvas, 0, 0, faviconSize, faviconSize);
