@@ -60,6 +60,31 @@
       transition-duration: 10s !important;
     }
 
+    /* 2 stage animation: 
+    - moves screw from off-screen to its position (up to 50% animation)
+    - after, it rotates while reducing scale to 1 to indicate screwing 
+    */
+    @keyframes screwIn {
+      0% {
+        transform: translate(100vmax, 100vmax) scale(1.5) rotate(0deg);
+      }
+      50% {
+        transform: translate(-50%, -50%) scale(1.5) rotate(0deg);
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(1) rotate(360deg);
+      }
+    }
+
+    @keyframes fadeIn {
+      0% {
+        opacity: 0;
+      }
+      100% {
+        opacity: 1;
+      }
+    }
+
 
     /* Screw indicators */
     .sg-screw {
@@ -71,6 +96,8 @@
       box-shadow: 0 0 6px 2px rgba(255, 122, 0, 0.35), inset 0 0 4px rgba(255, 122, 0, 0.4);
       pointer-events: none; /* don't block interactions with the tray */
       z-index: 5; /* sit above tray overlay */
+      animation: screwIn 0.8s ease both;
+      animation-play-state: paused;
     }
 
     .sg-screw::after {
@@ -92,6 +119,7 @@
       border-radius: 50%;
       background: radial-gradient(circle at 50% 50%, #ffffff 0%, #d9d9d9 55%, #cfcfcf 70%, #bfbfbf 90%);
       position: relative;
+      animation: fadeIn 0.5s 0.25s ease-out both;
     }
 
     .tray-overlay {
@@ -221,6 +249,16 @@
                 class="w-20 bg-gray-800 border border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-sg-accent/50" />
             </div>
           </div>
+          <div>
+            <label for="simulationSpeed" class="block text-sm font-medium mb-1">Simulation Speed <span
+                class="text-gray-500">(10 - 500 px/s)</span></label>
+            <div class="flex items-center gap-3">
+              <input id="simulationSpeed" type="range" min="10" max="500" step="10" x-model.number="linearSpeed"
+                class="w-full accent-sg-accent" />
+              <input type="number" step="10" min="10" max="500" x-model.number="linearSpeed"
+                class="w-24 bg-gray-800 border border-gray-600 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-sg-accent/50" />
+            </div>
+          </div>
           <div class="flex items-center gap-4 flex-wrap">
             <label class="inline-flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" x-model="autoMode" @change="sendMode()"
@@ -332,18 +370,18 @@
             <h2 class="text-lg font-semibold mb-3">Visualizer</h2>
             <div class="relative">
               <!-- Screws around tray (12) - positioned with percentages for responsiveness -->
-              <div class="sg-screw" style="top:2%; left:50%; transform:translate(-50%,-50%);"></div>
-              <div class="sg-screw" style="top:8%; left:78%; transform:translate(-50%,-50%);"></div>
-              <div class="sg-screw" style="top:28%; left:94%; transform:translate(-50%,-50%);"></div>
-              <div class="sg-screw" style="top:50%; left:100%; transform:translate(-50%,-50%);"></div>
-              <div class="sg-screw" style="top:72%; left:94%; transform:translate(-50%,-50%);"></div>
-              <div class="sg-screw" style="top:92%; left:78%; transform:translate(-50%,-50%);"></div>
-              <div class="sg-screw" style="top:98%; left:50%; transform:translate(-50%,-50%);"></div>
-              <div class="sg-screw" style="top:92%; left:22%; transform:translate(-50%,-50%);"></div>
-              <div class="sg-screw" style="top:72%; left:6%; transform:translate(-50%,-50%);"></div>
-              <div class="sg-screw" style="top:50%; left:0%; transform:translate(-50%,-50%);"></div>
-              <div class="sg-screw" style="top:28%; left:6%; transform:translate(-50%,-50%);"></div>
-              <div class="sg-screw" style="top:8%; left:22%; transform:translate(-50%,-50%);"></div>
+              <div class="sg-screw" style="top:2%; left:50%;"></div>
+              <div class="sg-screw" style="top:8%; left:78%;"></div>
+              <div class="sg-screw" style="top:28%; left:94%;"></div>
+              <div class="sg-screw" style="top:50%; left:100%;"></div>
+              <div class="sg-screw" style="top:72%; left:94%;"></div>
+              <div class="sg-screw" style="top:92%; left:78%;"></div>
+              <div class="sg-screw" style="top:98%; left:50%;"></div>
+              <div class="sg-screw" style="top:92%; left:22%;"></div>
+              <div class="sg-screw" style="top:72%; left:6%;"></div>
+              <div class="sg-screw" style="top:50%; left:0%;"></div>
+              <div class="sg-screw" style="top:28%; left:6%;"></div>
+              <div class="sg-screw" style="top:8%; left:22%;"></div>
               <div class="sand-tray shadow-sand" x-ref="tray">
                 <canvas x-ref="canvas" class="pattern-canvas"></canvas>
                 <canvas x-ref="debugCanvas" class="pattern-debug-canvas"></canvas>
@@ -749,14 +787,19 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
         // Ball & trench visualization (direct stamping; no offscreen accumulation)
         ballRadiusPx: 6, trenchDepth: 1.0, trenchSoftness: 8,
         lastHeadX: null, lastHeadY: null, trenchStampSpacingFactor: 0.55, // spacing = ballRadiusPx * factor
+        lastTrenchX: null, lastTrenchY: null, // last position where we drew trench TO
         trailInitialized: false, ballPrevImage: null, ballPrevBox: null,
-        // simulation timing (distance based)
+        // simulation timing (step based - on-the-fly generation)
         simulationRunning: false, linearSpeed: 300, lastTs: 0,
         wasSimulationRunningBeforeHide: false, // track pre-visibility state for auto-resume
-        simulationDistance: 0, totalPathLength: 0,
-        segmentLengths: [], segmentEndDistances: [], segmentIndex: 0,
-        segmentPolar: [], // per segment polar interpolation data {r0,r1,dr,theta0,theta1,dθ,length}
-        pointsPolar: [], // derived polar coordinates for each point (r, theta)
+        // Pattern generator state (produces one step at a time)
+        patternStepFn: null, // current pattern's step generator function
+        currentPolarState: { radial: 0, angular: 0 }, // current position in steps
+        targetPolarState: { radial: 0, angular: 0 }, // next target position in steps
+        animationProgress: 0, // 0-1 progress from current to target
+        isRestarting: true, // flag for pattern restart
+        lastRenderedProgress: 0, // track last rendered progress to draw trenches incrementally
+        accumulatedTrenchDistance: 0, // accumulated distance since last trench stamp
         // path accumulation
         pathCanvas: null, pathCtx: null, lastDrawnSegmentIndex: 0,
         init() {
@@ -790,7 +833,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
               this.wasSimulationRunningBeforeHide = false;
               this.lastTs = 0; // ensure fresh timing
               this.simulationRunning = true;
-              requestAnimationFrame(this.stepSimulation.bind(this));
+              requestAnimationFrame(this.animateStep.bind(this));
             } 
           }
         },
@@ -846,7 +889,8 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
               // set pixel positions relative to parent; keep translate(-50%,-50%) for centering
               el.style.left = x + 'px';
               el.style.top = y + 'px';
-              if (!el.style.transform) el.style.transform = 'translate(-50%,-50%)';
+              el.style.animationDelay = (i * 50) + 'ms'; // staggered fade-in
+              el.style.animationPlayState = 'running';
             }
           } catch (err) {
             // non-fatal
@@ -1799,7 +1843,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
         },
         async reconnect() { if (!this.device) { return this.connect(); } if (this.connected || this.connecting) return; try { this.connecting = true; this.setStatus('Reconnecting...'); await this.device.gatt.connect(); this.connecting = false; await this.connect(); } catch (e) { this.connecting = false; this.setStatus('Reconnect failed: ' + e.message); } },
         async selectPattern(id) {
-          this.pattern = id; this.setStatus('Selected pattern ' + id); this.regeneratePattern();
+          this.pattern = id; this.setStatus('Selected pattern ' + id); this.initializePattern();
           if (this.debugPoints.length) {
             this.clearDebugTrail();
           }
@@ -1808,19 +1852,60 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
             catch (e) { this.log('Pattern write err: ' + e.message); }
           }
         },
-        regeneratePattern() {
-          this.points = this.generatePatternPoints(this.pattern);
-          this.computePathMetrics();
-          this.simulationDistance = 0; this.segmentIndex = 0; this.lastDrawnSegmentIndex = 0;
+        initializePattern() {
+          // Initialize the pattern generator for on-the-fly step generation
+          this.patternStepFn = this.createPatternStepFunction(this.pattern);
+          this.currentPolarState = { radial: 0, angular: 0 };
+          this.targetPolarState = { radial: 0, angular: 0 };
+          this.animationProgress = 1; // start at target (will generate first step immediately)
+          this.isRestarting = true;
+          this.points = []; // clear old points array (not used in new system)
           this.resetTrail();
-          if (this.pattern !== 11) { this.dslInputsSeq = []; this.dslOutputsSeq = []; this.lastDSLInputs = null; this.lastDSLOutputs = null; this.dslStepCounter = 0; this.dslStartTimestamp = null; }
-          else { this.updateDSLDetails(); }
-          if (this.pattern !== 11) { this.dslLocalsSeq = []; this.lastDSLLocals = null; }
+          
+          if (this.pattern !== 11) { 
+            this.dslInputsSeq = []; 
+            this.dslOutputsSeq = []; 
+            this.lastDSLInputs = null; 
+            this.lastDSLOutputs = null; 
+            this.dslStepCounter = 0; 
+            this.dslStartTimestamp = null; 
+          }
+          else { 
+            this.updateDSLDetails(); 
+          }
+          if (this.pattern !== 11) { 
+            this.dslLocalsSeq = []; 
+            this.lastDSLLocals = null; 
+          }
           this.drawBackground();
           this.renderFrame();
         },
-        clearPattern() { this.points = []; this.resetTrail(); this.clearDebugTrail(); this.drawBackground(); this.renderFrame(); },
-        resetTrail() { this.lastHeadX = null; this.lastHeadY = null; this.trailInitialized = false; this.ballPrevImage = null; this.ballPrevBox = null; },
+        regeneratePattern() {
+          // Alias for compatibility - now just re-initializes the pattern
+          this.initializePattern();
+        },
+        clearPattern() { 
+          this.patternStepFn = null;
+          this.currentPolarState = { radial: 0, angular: 0 };
+          this.targetPolarState = { radial: 0, angular: 0 };
+          this.animationProgress = 1;
+          this.points = []; 
+          this.resetTrail(); 
+          this.clearDebugTrail(); 
+          this.drawBackground(); 
+          this.renderFrame(); 
+        },
+        resetTrail() { 
+          this.lastHeadX = null; 
+          this.lastHeadY = null; 
+          this.lastTrenchX = null;
+          this.lastTrenchY = null;
+          this.trailInitialized = false; 
+          this.ballPrevImage = null; 
+          this.ballPrevBox = null; 
+          this.accumulatedTrenchDistance = 0; 
+          this.lastRenderedProgress = 0;
+        },
         clearDebugTrail() {
           this.debugPoints = [];
           this.debugSimulationPoints = [];
@@ -1829,51 +1914,121 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
             this.debugCtx.clearRect(0, 0, this.debugCanvas.width, this.debugCanvas.height);
           }
         },
-        toggleSimulation() { if (this.debugStepsEnabled) { this.simulationRunning = false; return; } this.simulationRunning = !this.simulationRunning; if (this.simulationRunning) { this.lastTs = 0; requestAnimationFrame(this.stepSimulation.bind(this)); } },
+        toggleSimulation() { 
+          if (this.debugStepsEnabled) { 
+            this.simulationRunning = false; 
+            return; 
+          } 
+          this.simulationRunning = !this.simulationRunning; 
+          if (this.simulationRunning) { 
+            this.lastTs = 0; 
+            requestAnimationFrame(this.animateStep.bind(this)); 
+          } 
+        },
         stepOnce() {
           if (this.debugStepsEnabled) return;
           if (this.simulationRunning) return; // disabled while running
-          if (this.points.length < 2 || this.segmentPolar.length === 0) return;
-          // Determine advance distance: move to end of current segment, or wrap if at end
-          const currentSegLen = this.segmentLengths[this.segmentIndex] || 0;
-          const segStartDist = this.segmentIndex === 0 ? 0 : this.segmentEndDistances[this.segmentIndex - 1];
-          const distWithin = this.simulationDistance - segStartDist;
-          const remaining = Math.max(0, currentSegLen - distWithin);
-          if (remaining > 0) {
-            this.simulationDistance += remaining;
-            // After moving exactly to end, shift to the next segment logically so next step acts forward
-            if (Math.abs((this.simulationDistance - segStartDist) - currentSegLen) < 1e-6 && this.segmentIndex < this.segmentLengths.length - 1) {
-              this.segmentIndex++;
-            }
-          } else {
-            // already at end of segment: move a tiny epsilon into next segment
-            if (this.segmentIndex < this.segmentLengths.length - 1) {
-              this.segmentIndex++;
-              this.simulationDistance = this.segmentEndDistances[this.segmentIndex - 1] + 0.0001;
-            } else {
-              // wrap to start
-              this.simulationDistance = 0; this.segmentIndex = 0; this.clearPath(); this.resetTrail();
-            }
+          if (!this.patternStepFn) return;
+          
+          // If we're at the target, generate next step
+          if (this.animationProgress >= 1) {
+            this.generateNextStep();
           }
-          this.updateSegmentIndex();
-          this.updateTrail();
+          
+          // Move to the end of current animation
+          this.animationProgress = 1;
           this.updateDSLDetails();
           this.renderFrame();
         },
-        stepSimulation(ts) {
+        animateStep(ts) {
           if (!this.simulationRunning) return;
-          if (!this.lastTs) this.lastTs = ts; const dt = (ts - this.lastTs) / 1000; this.lastTs = ts;
-          this.simulationDistance += this.linearSpeed * dt;
-          if (this.simulationDistance >= this.totalPathLength) {
-            this.simulationDistance = 0; this.segmentIndex = 0; this.lastDrawnSegmentIndex = 0; this.clearPath();
-            if (this.trenchCtx) this.trenchCtx.clearRect(0, 0, this.trenchCanvas.width, this.trenchCanvas.height);
-            this.lastHeadX = null; this.lastHeadY = null;
+          if (!this.lastTs) this.lastTs = ts; 
+          const dt = (ts - this.lastTs) / 1000; 
+          this.lastTs = ts;
+          
+          if (!this.patternStepFn) {
+            this.simulationRunning = false;
+            return;
           }
-          this.updateSegmentIndex();
-          this.updateTrail();
+          
+          // If we've reached the target, generate the next step
+          if (this.animationProgress >= 1) {
+            this.generateNextStep();
+          }
+          
+          // Calculate distance for this frame
+          const segmentDistance = this.calculateSegmentDistance();
+          if (segmentDistance > 0) {
+            const distanceDelta = this.linearSpeed * dt;
+            const progressDelta = distanceDelta / segmentDistance;
+            this.animationProgress = Math.min(1, this.animationProgress + progressDelta);
+          } else {
+            // Zero distance segment, skip immediately
+            this.animationProgress = 1;
+          }
+          
           this.updateDSLDetails();
           this.renderFrame();
-          requestAnimationFrame(this.stepSimulation.bind(this));
+          requestAnimationFrame(this.animateStep.bind(this));
+        },
+        generateNextStep() {
+          if (!this.patternStepFn) return;
+          
+          // Current becomes previous target
+          this.currentPolarState = { ...this.targetPolarState };
+          
+          // Generate next target
+          const nextTarget = this.patternStepFn(this.currentPolarState, this.isRestarting);
+          this.isRestarting = false;
+          
+          if (!nextTarget) {
+            // Pattern exhausted, restart
+            this.isRestarting = true;
+            this.currentPolarState = { radial: 0, angular: 0 };
+            this.targetPolarState = { radial: 0, angular: 0 };
+            this.resetTrail();
+            this.drawBackground();
+            return;
+          }
+          
+          this.targetPolarState = nextTarget;
+          this.animationProgress = 0;
+          this.lastRenderedProgress = 0; // Reset for new segment
+          // Don't reset accumulatedTrenchDistance - it should carry over for continuous spacing
+        },
+        calculateSegmentDistance() {
+          // Calculate polar distance from current to target
+          const MAX_R_STEPS = 7000;
+          const STEPS_PER_A_AXIS_REV = 2 * 2048;
+          
+          const r0 = this.currentPolarState.radial;
+          const r1 = this.targetPolarState.radial;
+          const a0 = this.currentPolarState.angular;
+          const a1 = this.targetPolarState.angular;
+          
+          // Compute angular difference (shortest path) - FIX: proper wrapping
+          let dθSteps = a1 - a0;
+          const halfRev = STEPS_PER_A_AXIS_REV / 2;
+          while (dθSteps > halfRev) dθSteps -= STEPS_PER_A_AXIS_REV;
+          while (dθSteps < -halfRev) dθSteps += STEPS_PER_A_AXIS_REV;
+          
+          const dr = r1 - r0;
+          
+          // Convert angular steps to canvas pixels for distance calculation
+          // Use average radius for arc length
+          const avgRadius = (r0 + r1) / 2;
+          const trayRadiusPx = this.canvas ? this.canvas.width * this.trayRadiusFactor : 400;
+          const avgRadiusPx = (avgRadius / MAX_R_STEPS) * trayRadiusPx;
+          
+          // Arc distance in pixels
+          const angleRad = (dθSteps / STEPS_PER_A_AXIS_REV) * 2 * Math.PI;
+          const arcDistPx = avgRadiusPx * Math.abs(angleRad);
+          
+          // Radial distance in pixels
+          const radialDistPx = (Math.abs(dr) / MAX_R_STEPS) * trayRadiusPx;
+          
+          // Combined distance (Pythagorean)
+          return Math.hypot(radialDistPx, arcDistPx);
         },
         drawBackground() {
           if (!this.ctx) return; const ctx = this.ctx; const w = this.canvas.width; const h = this.canvas.height; ctx.clearRect(0, 0, w, h);
@@ -1882,119 +2037,105 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2); ctx.fill();
         },
         ensurePathBuffer() { /* offscreen path buffer removed */ },
-        clearPath() { if (this.pathCtx) { this.pathCtx.clearRect(0, 0, this.pathCanvas.width, this.pathCanvas.height); this.lastDrawnSegmentIndex = 0; } },
-        computePathMetrics() {
-          this.segmentLengths = []; this.segmentEndDistances = []; this.segmentPolar = []; this.pointsPolar = []; this.totalPathLength = 0;
-          const n = this.points.length; if (n < 2) return;
-          const cx = this.canvas.width / 2; const cy = this.canvas.height / 2;
-          // Build polar points (r in pixels, theta in radians)
-          for (let i = 0; i < n; i++) {
-            const p = this.points[i]; const dx = p.x - cx; const dy = p.y - cy; const r = Math.hypot(dx, dy); let theta = Math.atan2(dy, dx); // [-pi,pi]
-            this.pointsPolar.push({ r, theta });
-          }
-          const tiny = 1e-9;
-          function segmentLengthPolar(r0, r1, dr, dθ) {
-            const absDr = Math.abs(dr); const absDθ = Math.abs(dθ);
-            if (absDr < tiny && absDθ < tiny) return 0;
-            if (absDr < tiny) return r0 * absDθ; // pure arc
-            if (absDθ < tiny) return absDr; // pure radial
-            const k = dr; const B = dθ * dθ; const sqrtB = Math.sqrt(B);
-            function G(u) { return 0.5 * (u * Math.sqrt(k * k + B * u * u) + (k * k / sqrtB) * Math.asinh((sqrtB * u) / Math.abs(k))); }
-            const L = (G(r1) - G(r0)) / k; return Math.abs(L);
-          }
-          for (let i = 0; i < n - 1; i++) {
-            const p0 = this.pointsPolar[i]; const p1 = this.pointsPolar[i + 1];
-            let dθ = p1.theta - p0.theta;
-            // Shortest angular difference wrap to [-pi, pi]
-            while (dθ > Math.PI) dθ -= 2 * Math.PI; while (dθ < -Math.PI) dθ += 2 * Math.PI;
-            const dr = p1.r - p0.r;
-            const len = segmentLengthPolar(p0.r, p1.r, dr, dθ);
-            this.totalPathLength += len;
-            this.segmentLengths.push(len);
-            this.segmentEndDistances.push(this.totalPathLength);
-            this.segmentPolar.push({ r0: p0.r, r1: p1.r, dr, theta0: p0.theta, theta1: p1.theta, dθ, length: len });
-          }
-        },
-        updateSegmentIndex() {
-          // advance segmentIndex until segmentEndDistances[segmentIndex] >= simulationDistance
-          while (this.segmentIndex < this.segmentEndDistances.length - 1 && this.segmentEndDistances[this.segmentIndex] < this.simulationDistance) {
-            this.segmentIndex++;
-          }
-        },
-        updateTrail() {
-          // Always advance lastDrawnSegmentIndex (trails always on)
-          this.lastDrawnSegmentIndex = this.segmentIndex;
-        },
+        clearPath() { /* not needed in on-the-fly system */ },
         updateDSLDetails() {
           if (this.pattern !== 11) return; // only for DSL pattern
-          if (!this.dslInputsSeq.length) return;
-          // Map simulationDistance to nearest point index. segmentIndex corresponds to progression into segment between point[segmentIndex] and point[segmentIndex+1].
-          // We'll display the starting point's data when at the segment start, and the next once we pass half the segment.
-          let idx = this.segmentIndex;
-          const segLen = this.segmentLengths[this.segmentIndex] || 0;
-          if (segLen > 0) {
-            const segStartDist = this.segmentIndex === 0 ? 0 : this.segmentEndDistances[this.segmentIndex - 1];
-            const distWithin = this.simulationDistance - segStartDist;
-            if (distWithin / segLen >= 0.5) idx = Math.min(idx + 1, this.dslInputsSeq.length - 1);
-          }
-          idx = Math.min(Math.max(0, idx), this.dslInputsSeq.length - 1);
-          this.lastDSLInputs = this.dslInputsSeq[idx];
-          this.lastDSLOutputs = this.dslOutputsSeq[idx];
-          this.lastDSLLocals = this.dslLocalsSeq[idx] || {};
+          // In on-the-fly system, we update DSL details based on current position
+          // The details were already set during step generation
         },
-        // onShowTrailsChange removed (trails always enabled)
         renderFrame() {
           const ctx = this.ctx;
-          if (!this.trailInitialized) { this.drawBackground(); this.trailInitialized = true; }
-          // Draw head at current simulation index
-          if (this.points.length >= 2 && this.segmentPolar.length) {
-            const seg = this.segmentPolar[this.segmentIndex];
-            if (seg) {
-              const segStartDist = this.segmentIndex === 0 ? 0 : this.segmentEndDistances[this.segmentIndex - 1];
-              const distWithin = this.simulationDistance - segStartDist;
-              // Invert arc-length to get parameter fraction along polar segment
-              let t;
-              const tiny = 1e-9;
-              if (seg.length < tiny) {
-                t = 0;
-              } else if (Math.abs(seg.dr) < tiny && Math.abs(seg.dθ) > tiny) { // pure arc
-                t = distWithin / seg.length;
-              } else if (Math.abs(seg.dθ) < tiny && Math.abs(seg.dr) > tiny) { // pure radial
-                t = distWithin / seg.length;
-              } else {
-                // binary search invert lengthAt(t)
-                function lengthAt(tt) {
-                  // reuse analytic integral via r(t)
-                  const r0 = seg.r0; const dr = seg.dr; const dθ = seg.dθ; const k = dr; const B = dθ * dθ; const sqrtB = Math.sqrt(B);
-                  function G(u) { return 0.5 * (u * Math.sqrt(k * k + B * u * u) + (k * k / sqrtB) * Math.asinh((sqrtB * u) / Math.abs(k))); }
-                  if (Math.abs(dr) < tiny) return r0 * Math.abs(dθ) * tt; // arc
-                  const rT = r0 + dr * tt; const L = (G(rT) - G(r0)) / dr; return Math.abs(L);
-                }
-                let lo = 0, hi = 1; t = 0; const target = distWithin; for (let iter = 0; iter < 18; iter++) { const mid = (lo + hi) / 2; const Lm = lengthAt(mid); if (Lm < target) { lo = mid; } else { hi = mid; } } t = (lo + hi) / 2;
-              }
-              t = Math.min(1, Math.max(0, t));
-              const cx = this.canvas.width / 2; const cy = this.canvas.height / 2;
-              const r = seg.r0 + seg.dr * t; const theta = seg.theta0 + seg.dθ * t;
-              const hx = cx + r * Math.cos(theta); const hy = cy + r * Math.sin(theta);
-              // Incremental stamping directly on main canvas
-              {
-                if (this.lastHeadX != null && this.lastHeadY != null) {
-                  this.drawTrenchSegment(this.lastHeadX, this.lastHeadY, hx, hy);
-                } else {
-                  this.drawTrenchStamp(hx, hy);
-                }
-                this.lastHeadX = hx; this.lastHeadY = hy;
-              }
-              // Draw head (ball)
-              const ballR = this.ballRadiusPx;
-              if (this.ballPrevImage && this.ballPrevBox) {
-                try { ctx.putImageData(this.ballPrevImage, this.ballPrevBox.x, this.ballPrevBox.y); } catch (_) { }
-              }
-              this.drawBallAt(hx, hy);
-            }
-          } else if (this.points.length === 1) {
-            const p = this.points[0]; ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+          if (!this.trailInitialized) { 
+            this.drawBackground(); 
+            this.trailInitialized = true; 
           }
+          
+          if (!this.patternStepFn) return;
+          
+          // Calculate interpolated position between current and target
+          const t = this.animationProgress >= 1 ? 1 : this.animationProgress;
+          
+          // Interpolate in polar coordinates
+          const r0 = this.currentPolarState.radial;
+          const r1 = this.targetPolarState.radial;
+          const a0 = this.currentPolarState.angular;
+          const a1 = this.targetPolarState.angular;
+          
+          const STEPS_PER_A_AXIS_REV = 2 * 2048;
+          
+          // Angular interpolation (shortest path)
+          let dθSteps = a1 - a0;
+          const halfRev = STEPS_PER_A_AXIS_REV / 2;
+          while (dθSteps > halfRev) dθSteps -= STEPS_PER_A_AXIS_REV;
+          while (dθSteps < -halfRev) dθSteps += STEPS_PER_A_AXIS_REV;
+          
+          // Previous position (where we last drew)
+          const prevR = r0 + (r1 - r0) * this.lastRenderedProgress;
+          const prevA = a0 + dθSteps * this.lastRenderedProgress;
+          const prevPt = this.polarToCanvas(prevR, prevA);
+          
+          // Current position
+          const currentR = r0 + (r1 - r0) * t;
+          const currentA = a0 + dθSteps * t;
+          const pt = this.polarToCanvas(currentR, currentA);
+          
+          if (!pt) return;
+          
+          const hx = pt.x;
+          const hy = pt.y;
+          
+          // Draw trench: only when we've moved a sufficient distance from last trench position
+          const trenchStampSpacing = this.ballRadiusPx * this.trenchStampSpacingFactor;
+          
+          if (this.lastTrenchX == null || this.lastTrenchY == null) {
+            // Very first stamp
+            this.drawTrenchStamp(hx, hy);
+            this.lastTrenchX = hx;
+            this.lastTrenchY = hy;
+          } else {
+            // Check distance from last trench position
+            const dx = hx - this.lastTrenchX;
+            const dy = hy - this.lastTrenchY;
+            const distanceSinceLastTrench = Math.hypot(dx, dy);
+            
+            // Draw trench segment if we've moved enough distance
+            if (distanceSinceLastTrench >= trenchStampSpacing * 0.8) {
+              this.drawTrenchSegment(this.lastTrenchX, this.lastTrenchY, hx, hy);
+              this.lastTrenchX = hx;
+              this.lastTrenchY = hy;
+            }
+          }
+          
+          // Update tracking variables for ball position
+          this.lastRenderedProgress = t;
+          this.lastHeadX = hx; 
+          this.lastHeadY = hy;
+          
+          // Always restore previous ball and draw new ball position (for smooth animation)
+          const ballR = this.ballRadiusPx;
+          if (this.ballPrevImage && this.ballPrevBox) {
+            try { ctx.putImageData(this.ballPrevImage, this.ballPrevBox.x, this.ballPrevBox.y); } catch (_) { }
+          }
+          this.drawBallAt(hx, hy);
+        },
+        polarToCanvas(rSteps, aSteps) {
+          if (!this.canvas) return null;
+          const MAX_R_STEPS = 7000;
+          const STEPS_PER_A_AXIS_REV = 2 * 2048;
+          const size = this.canvas.width;
+          const cx = size / 2;
+          const cy = size / 2;
+          const trayR = size * this.trayRadiusFactor;
+          
+          const clampedR = Math.max(0, Math.min(MAX_R_STEPS, rSteps));
+          const rNorm = clampedR / MAX_R_STEPS;
+          const rPx = rNorm * trayR;
+          const theta = -(aSteps / STEPS_PER_A_AXIS_REV) * (Math.PI * 2);
+          
+          return { 
+            x: cx + rPx * Math.cos(theta), 
+            y: cy + rPx * Math.sin(theta) 
+          };
         },
         exportImage() {
           // Ensure frame is up to date
@@ -2014,23 +2155,17 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           link.href = sourceCanvas.toDataURL('image/png');
           link.click();
         },
-        // Pattern generators – firmware-accurate translation ---------------------------
-        generatePatternPoints(id) {
-          const size = this.canvas.width; const cx = size / 2; const cy = size / 2; const trayR = size * 0.48;
-          const MAX_R_STEPS = 7000; const STEPS_PER_MOTOR_REV = 2048; const STEPS_PER_A_AXIS_REV = 2 * STEPS_PER_MOTOR_REV;
+        // Pattern generator factories (return step functions for on-the-fly generation)
+        createPatternStepFunction(id) {
+          const MAX_R_STEPS = 7000; 
+          const STEPS_PER_MOTOR_REV = 2048; 
+          const STEPS_PER_A_AXIS_REV = 2 * STEPS_PER_MOTOR_REV;
 
           // --- Math helpers mirroring firmware ---
           const fmap = (n, in_min, in_max, out_min, out_max) => (n - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
           const convertDegreesToSteps = deg => Math.round(fmap(deg, 0, 360, 0, 2 * STEPS_PER_MOTOR_REV));
           const convertStepsToRadians = steps => fmap(steps, 0, 2 * STEPS_PER_MOTOR_REV, 0, 2 * Math.PI);
           const modulus = (x, y) => x < 0 ? ((x + 1) % y) + y - 1 : x % y;
-
-          const polarToXY = (rSteps, aSteps) => {
-            const clampedR = Math.max(0, Math.min(MAX_R_STEPS, rSteps));
-            const rNorm = clampedR / MAX_R_STEPS; const rPx = rNorm * trayR;
-            const theta = -(aSteps / STEPS_PER_A_AXIS_REV) * (Math.PI * 2);
-            return { x: cx + rPx * Math.cos(theta), y: cy + rPx * Math.sin(theta) };
-          };
 
           // --- drawLine replication (stateful iterator per line) ---
           function createLineIterator(point0, point1, resolution = 100) {
@@ -2292,24 +2427,10 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
             }
           };
 
-          // --- Simulation driver ---
-          const factory = patternFactories[id]; if (!factory) return [];
-          const stepFn = factory();
-          const targetPoints = this.patternMeta[id - 1]?.pointsTarget || 20000;
-          let current = { radial: 0, angular: 0 }; let restart = true; const pts = [];
-          let safety = targetPoints * 4; // guardrail halt
-          while (pts.length < targetPoints && safety-- > 0) {
-            const target = stepFn(current, restart);
-            restart = false;
-            // orchestrateMotion simplified effect: final position equals target (angle wrapped)
-            current = {
-              radial: Math.max(0, Math.min(MAX_R_STEPS, target.radial)),
-              angular: modulus(target.angular, STEPS_PER_A_AXIS_REV)
-            };
-            const xy = polarToXY(current.radial, current.angular);
-            pts.push(xy);
-          }
-          return pts;
+          // Return the step function directly (on-the-fly generation)
+          const factory = patternFactories[id];
+          if (!factory) return null;
+          return factory();
         }
       }
     }
