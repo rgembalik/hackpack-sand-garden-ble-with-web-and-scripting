@@ -486,12 +486,17 @@ ADD
 
 ## 20. Next Immediate Actions (v0.6.0)
 
-1. Validate manual fault test matrix on hardware & web preview.
-1. Update README + UI helper text for new math function roster.
 1. Investigate exposing optional RNG seed override for deterministic previews.
 1. Explore device→web script sync (status unchanged).
+1. fix nomenclature - simulation step is not the same as motorsteps, but they keep being called as steps
+1. allow web-client to obtain state of local variables from device when debugging script execution
+1. add ability to transpile sandscript to cpp, that could run in original firmware
 
-## 21. Manual Test Scenarios (v0.6.0)
+## 21. Deferred / Nice-to-haves
+1. Explore constant-pool compression or 16-bit literal packing to shrink large scripts.
+
+
+## 22. Manual Test Scenarios (v0.6.0)
 
 | ID | Focus | Script Snippet | Expected Result |
 |----|-------|----------------|-----------------|
@@ -507,11 +512,5 @@ ADD
 | T10 | RNG fallback path | Disconnect crypto API (devtools override) and run T5 | random() still yields values via timestamp fallback; first value differs from seeded run. |
 
 Document results (pass/fail, notes) in the QA log after each firmware/web release.
-1. fix nomenclature - simulation step is not the same as motorsteps, but they keep being called as steps
-1. allow web-client to obtain state of local variables from device when debugging script execution
-1. add ability to transiple sandscript to cpp, that could run in original firmware
 
-## 21. Deferred / Nice-to-haves
-1. Explore constant-pool compression or 16-bit literal packing to shrink large scripts.
-
-**End of Plan v0.5.0 Draft**
+**End of Plan Draft**
