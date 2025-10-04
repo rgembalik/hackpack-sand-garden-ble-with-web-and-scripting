@@ -1,7 +1,7 @@
 # Sandscript DSL (domain specific language) Implementation Plan
 
-Status: Working Draft v0.5.0 (web + firmware compilers aligned; zero-division guard unified)
-Date: 2025-09-28
+Status: Working Draft v0.6.0 (math extensions + NaN/Inf fault parity)
+Date: 2025-10-04
 Owner: (You)
 
 ## Progress Snapshot
@@ -18,7 +18,7 @@ Owner: (You)
 | Physical units abstraction | ✅ Done | Script sees `radius` (cm) & `angle` (deg); internal conversion to steps. |
 | Example scripts (base creative set) | ✅ Refreshed | Vibrant set incl. PingPongPetals, MirrorSpiral, EchoBloom, BounceWeave, StarPing, LaceHelix, RevCascade, StartBurst, PetalDrift, SelfRefWarp. |
 | Firmware scaffold (headers & stubs) | ✅ Done | `PatternScript.h/.cpp` placeholders. |
-| Real firmware compiler | ✅ Done | `PatternScript.cpp` implements tokenizer, parser, op encoder, and runtime with modulo/sign/time parity (DIV/MOD → 0 on zero denominator). |
+| Real firmware compiler | ✅ Done | `PatternScript.cpp` covers tan/min/max/pow/sqrt/exp/random/floor/ceil/round, propagates NaN/Inf, and latches runtime faults. |
 | BLE script upload protocol | ✅ Done | `BLEConfigServer` exposes BEGIN/DATA/END pipeline with timeout + status callbacks. |
 | Documentation (user-facing usage) | 🚧 In progress | README rewrite underway focusing on beginner quick-start + DSL primer. |
 | Internal representation write-up | ⏳ Pending | Section to be expanded (todo). |
@@ -28,8 +28,10 @@ Owner: (You)
 | `time` synthetic input | ✅ Done | Milliseconds since script start (web: performance.now baseline). |
 | Ephemeral local variables | ✅ Done | Any new identifier assigned becomes single-pass local. |
 | `sign()` function | ✅ Done | Enables arithmetic mirror / ping-pong patterns. |
-| `random()` function | ❌ Not yet | function to get random number between 0 and 1. |
-| `sqrt()` function | ❌ Not yet | function to calculate square root. |
+| `tan()` / `min()` / `max()` functions | ✅ Done | Firmware + web runtime parity with degree-based tan and 2-arg min/max. |
+| `pow()` / `sqrt()` / `exp()` functions | ✅ Done | Added power, square root, and natural exponential. |
+| `random()` function | ✅ Done | LCG-backed RNG seeded per run (ESP32 HW random → web crypto fallback). |
+| NaN / Infinity fault propagation | ✅ Done | Non-finite outputs halt preview + firmware with mask + diagnostics. |
 | Mirror arithmetic guidance | ✅ Done | Achieved via `dir = sign(cos(rev * 180))` pattern; no mode flag in DSL. |
 
 Legend: ✅ Completed / ⏳ Pending / 🚧 In Progress
@@ -40,7 +42,7 @@ Provide a **minimal, math-expression style DSL** to define motion patterns for t
 - Runs in the HTML client for preview & visualization.
 - Can be embedded as built-in patterns (flash constants) or uploaded via BLE (chunked if needed).
 
-## 2. Current Scope (v0 Requirements – Updated v0.5.0)
+## 2. Current Scope (v0 Requirements – Updated v0.6.0)
 | Feature | Included v0 | Notes |
 |---------|-------------|-------|
 | Absolute outputs | Yes | Provide next absolute polar target. |
@@ -48,11 +50,12 @@ Provide a **minimal, math-expression style DSL** to define motion patterns for t
 | Inputs (read-only) | radius (cm), angle (deg), start, rev, steps, time | `angle` wrapped 0–360; `rev = unwrappedAngleDeg / 360` continuous; `steps` increments each evaluation; `time` ms since first evaluation (web uses high-res timer). |
 | Time / counters | Incorporated (`steps`, `time`) | Early inclusion to enable richer temporal patterns; firmware must add before parity release. |
 | Variables / params | Ephemeral locals | Any non-reserved identifier assigned becomes a one-pass local (not persisted). |
-| Math operators | + - * / % unary -, parentheses | `%` remainder (b==0 → 0). |
-| Trig | sin(), cos() (degree-based) | Degree arguments; radians removed for now. |
-| Other math | abs(), clamp(x,a,b), sign(x) | `sign` returns -1,0,1 enabling mirror / ping-pong. |
-| Power / sqrt | Optional (defer) | Add in v1 if needed. |
-| Modulus operator | Yes | Remainder operator `%` (b==0 → 0). |
+| Math operators | + - * / % unary -, parentheses | `%` remainder (no implicit guards; non-finite results trigger faults). |
+| Trig | sin(), cos(), tan() (degree-based) | Degree arguments; `tan` shares degree input. |
+| Other math | abs(), clamp(x,a,b), sign(x), min/max(x,y), pow(x,y), sqrt(x), exp(x), random(), floor(x), ceil(x), round(x) | `sign` returns -1/0/1 with ±1e-6 deadband; `random` yields [0,1); rounding functions mirror `floorf`/`ceilf`/`roundf`. |
+| Power / sqrt | Yes | `pow`, `sqrt` implemented in v0.6 parity build. |
+| Modulus operator | Yes | Remainder operator `%`; NaN/Inf propagate to fault mask. |
+| Runtime fault handling | Yes | NaN/Inf on outputs halts runtime and surfaces `faultMask` + metadata. |
 | Conditionals / ternary | No | Defer. |
 | Comments | `# ...` end-of-line | For readability. |
 | Whitespace | Ignored | Standard. |
@@ -134,14 +137,16 @@ unary      := ('-' unary) | primary
 primary    := NUMBER | ident | func | '(' expr ')'
 func       := funcName '(' argList? ')'
 argList    := expr (',' expr)*
-funcName   := 'sin' | 'cos' | 'abs' | 'clamp' | 'sign'
+funcName   := 'sin' | 'cos' | 'tan' | 'abs' | 'clamp' | 'sign' | 'min' | 'max' | 'pow' | 'sqrt' | 'exp' | 'random'
 comment    := '#' <any chars until EOL>
 NUMBER     := [0-9]+ ('.' [0-9]+)?
 ```
 Notes:
 - Left-associative +,-,*,/,% ( * / % share precedence ).
-- No exponent operator in v0.
+- No standalone exponent operator; use `pow(base, exp)`.
 - `clamp(x,a,b)` returns min(max(x,a),b).
+- `random()` takes zero arguments.
+- `min`/`max` accept two arguments; `tan` uses degree input.
 - User-defined identifiers now allowed as ephemeral locals (single-pass) if not reserved.
 - Reassignment overwrites earlier value within the same evaluation pass.
 - Forward reference to a local/output before assignment is a compile error.
@@ -278,13 +283,16 @@ Convert units to steps
 - Script length / tokens / ops exceed limits → ERR_TOO_LONG
 
 ### 7.7 Execution Edge Cases
-- Division by zero (DIV or MOD): return 0 (push 0) to avoid Inf/NaN.
-- `sin`/`cos` expect degrees; use fast degree→rad conversion: `rad = deg * (PI/180)`.
+- Division by zero (DIV or MOD): propagate Inf/NaN; interpreter flags fault mask and halts rather than coercing to 0.
+- `sin`/`cos`/`tan` expect degrees; use fast degree→rad conversion: `rad = deg * (PI/180)`.
 - `clamp`: assume caller supplies sensible a≤b; if a>b treat min/max swapped.
 - `sign(±0)` returns 0; NaN input yields 0 (avoid propagating NaN to motion).
+- `floor` / `ceil` / `round` use single-precision math (`floorf` / `ceilf` / `roundf`); inputs exactly at ±0.5 follow standard tie-to-away-from-zero behaviour via `roundf`.
+- `pow` with negative base and fractional exponent produces NaN → fault.
+- `random()` pulls from 32-bit LCG; seed resets when `start` flag is 1.
 
 ### 7.8 Determinism & Temporal Parity
-No RNG in v0. Temporal variables introduce non-determinism relative to wall-clock; for parity tests, inject a deterministic `time` progression (e.g. fixed dt per eval). Web harness should allow overriding `time` injection for golden tests. All math uses single-precision on MCU; differences between web (double) and MCU (float) acceptable (<1 step) but can be reduced by applying `Math.fround` when generating expected comparisons.
+`random()` uses a shared 32-bit LCG seeded per run (ESP32 `esp_random()` → timestamp fallback; web → `crypto.getRandomValues` → timestamp fallback). Temporal variables (`steps`, `time`) and RNG introduce controlled non-determinism; parity tests should stub seed/time to constant values. All math uses single-precision on MCU; differences between web (double) and MCU (float) acceptable (<1 step) but can be reduced by applying `Math.fround` when generating expected comparisons.
 
 ### 7.9 Memory Footprint Targets
 Derive per-assignment op storage: If max 48 ops * (1 opcode + 4 bytes const worst case) ~ 240B per heavy assignment; with 4 outputs + locals typical < 1 KB.
@@ -331,7 +339,7 @@ Return numeric codes to caller; optionally map to short message for BLE/status l
    - Command sequence: client sends `SCRIPT_START <length>`, then `SCRIPT_CHUNK` packets, then `SCRIPT_END`.
    - Accumulate into buffer, compile, respond with status.
    - Provide ephemeral `currentScript` slot or assign to pattern index.
-5. **Safety**: If eval returns NaN or INF, replace output with prior position.
+5. **Safety**: If eval detects NaN/Inf in outputs, set `faulted` state, report `faultMask`, halt motion, and leave head at current position.
 
 ## 11. Web (HTML) Client Plan (RPN only)
 Components:
@@ -418,6 +426,19 @@ next_radius = clamp(radius + (target - radius)*0.30, 0, 15)
 next_angle  = angle + 6
 ```
 
+I. Random walk seed reset:
+```
+delta_radius = random() * 0.5
+delta_angle = 10
+```
+Restart preview/device twice; confirm first `delta_radius` matches per run.
+
+J. Fault trigger sanity:
+```
+next_angle = angle / 0
+```
+Expect preview + firmware to flag fault and halt motion.
+
 ## 16. RPN Example Encoding (unchanged semantics)
 Expression: `angle + 90 + 20 * sin(radius * 0.01)`
 Tokens → RPN: `angle 90 + 20 radius 0.01 * sin * +`
@@ -442,10 +463,10 @@ ADD
 - Total < 6 KB (excluding trig functions from libm)
 - RAM: script buffer (512B) + token array (~512B) + bytecode (~256B) + stack (64B) ≈ < 1.5 KB transient.
 
-## 18. Future (v1+) Extensions (Not in v0 – updated for v0.4.2)
+## 18. Future (v1+) Extensions (Not in v0 – updated for v0.6.0)
 | Feature | Notes |
 |---------|-------|
-| Additional functions | tan, sqrt, pow, noise, rand1. |
+| Additional functions | noise(), randomRange(a,b), hypot(), optional easing helpers. |
 | Ternary | Adds jump ops; keep simple for now. |
 | User params | `param speed = 0.5` pre-eval once. |
 | Variables | Introduce `let x = ...` persistent between eval calls. |
@@ -455,22 +476,42 @@ ADD
 ## 19. Open Decisions (Updated)
 | Decision | Options |
 |----------|---------|
-| Include tan()/pow() in v0? | Default no; add when requested. |
+| Expand stochastic/math helpers beyond v0.6? | Defer to user demand (noise(), randomRange(), lerp, etc.). |
 | Output reference policy | Ordered references allowed (already implemented). |
 | Unit abstraction permanence | Lock cm/deg unless strong reason to revert. |
 | Add constants (pi, tau) | Deferred – reintroduce only if needed. |
 | `rev` input permanence | Locked in (proved useful). |
 | sign() permanence | Keep (tiny & enables mirror). |
-| Local variable limit | Tentatively 8 (review after MCU memory test). |
 | BLE framing ASCII vs Binary first? | ASCII for debugging. |
 
-## 20. Next Immediate Actions (v0.5.0)
+## 20. Next Immediate Actions (v0.6.0)
 
-1. Add `sqrt()`
-1. Add `random()` (0-1 pseudoranom generator)
+1. Validate manual fault test matrix on hardware & web preview.
+1. Update README + UI helper text for new math function roster.
+1. Investigate exposing optional RNG seed override for deterministic previews.
+1. Explore device→web script sync (status unchanged).
+
+## 21. Manual Test Scenarios (v0.6.0)
+
+| ID | Focus | Script Snippet | Expected Result |
+|----|-------|----------------|-----------------|
+| T1 | Division by zero fault | `next_angle = angle / 0` | Preview halts, fault mask = `next_angle`, BLE log reports `FAULT next_angle`. |
+| T2 | Modulo zero fault | `next_radius = radius % 0` | Fault mask = `next_radius`, position holds. |
+| T3 | Negative sqrt fault | `next_radius = sqrt(-1)` | Fault mask = `next_radius`, log shows NaN. |
+| T4 | `pow` overflow fault | `next_angle = pow(1e38, 2)` | Fault mask = `next_angle`, device stops. |
+| T5 | Random seeding parity | `delta_radius = random()` | Preview + hardware produce different sequences across runs but restart resets seed (first value repeats). |
+| T6 | Min/Max clamp sanity | `next_radius = max(min(radius, 12), 3)` | No fault, both runtimes clamp identically. |
+| T7 | Tan asymptote handling | `next_angle = tan(90)` | Result is large finite number (<Inf); no fault but ensure values match within tolerance. |
+| T8 | Fault UI telemetry | Use T1 script while preview running | UI displays red "Runtime fault" card, simulation toggled off automatically. |
+| T9 | Device fault telemetry | Upload T3 to hardware | Device reports fault over BLE, pattern stops, web debug stream mirrors halt. |
+| T10 | RNG fallback path | Disconnect crypto API (devtools override) and run T5 | random() still yields values via timestamp fallback; first value differs from seeded run. |
+
+Document results (pass/fail, notes) in the QA log after each firmware/web release.
+1. fix nomenclature - simulation step is not the same as motorsteps, but they keep being called as steps
+1. allow web-client to obtain state of local variables from device when debugging script execution
+1. add ability to transiple sandscript to cpp, that could run in original firmware
 
 ## 21. Deferred / Nice-to-haves
 1. Explore constant-pool compression or 16-bit literal packing to shrink large scripts.
-2. Add additional math functions (wrapClamp? other trigs?)
 
 **End of Plan v0.5.0 Draft**

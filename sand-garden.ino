@@ -2053,6 +2053,28 @@ Positions pattern_SandScript(Positions current, bool restartPattern)
 
   Positions next = evalPatternScript(g_activeScript.program, g_activeScript.runtime, current, restartPattern);
 
+  if (g_activeScript.runtime.faulted) {
+    String outputs;
+    auto appendOutput = [&](uint8_t mask, const __FlashStringHelper *label) {
+      if (g_activeScript.runtime.faultMask & mask) {
+        if (outputs.length()) outputs += ',';
+        outputs += label;
+      }
+    };
+    appendOutput(PSG_MASK_NEXT_RADIUS, F("next_radius"));
+    appendOutput(PSG_MASK_DELTA_RADIUS, F("delta_radius"));
+    appendOutput(PSG_MASK_NEXT_ANGLE, F("next_angle"));
+    appendOutput(PSG_MASK_DELTA_ANGLE, F("delta_angle"));
+    if (!outputs.length()) {
+      outputs = F("unknown");
+    }
+    String err = String("Runtime error: NaN/Inf in ") + outputs;
+    g_activeScript.lastError = err;
+    bleConfig.notifyStatus(String("[SCRIPT] RUNTIME_ERR ") + err);
+    setRunLocal(false);
+    return current;
+  }
+
   SandScriptEvalInputsSnapshot snapshot;
   snapshot.radiusCm = convertStepsToMM(static_cast<float>(current.radial)) / 10.0f;
   snapshot.angleDeg = convertStepsToDegrees(current.angular);

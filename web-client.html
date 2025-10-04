@@ -5,7 +5,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Sand Garden Controller</title>
-  <link rel="icon" type="image/x-icon" id="favicon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" />
+  <link rel="icon" type="image/x-icon" id="favicon"
+    href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" />
   <!-- TailwindCSS v4 CDN (placeholder; update if hash changes) -->
   <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
   <script>
@@ -52,7 +53,7 @@
       background: #444;
     }
 
-    
+
     .duration-1000 {
       transition-duration: 1s !important;
     }
@@ -69,9 +70,11 @@
       0% {
         transform: translate(100vmax, 100vmax) scale(1.5) rotate(0deg);
       }
+
       50% {
         transform: translate(-50%, -50%) scale(1.5) rotate(0deg);
       }
+
       100% {
         transform: translate(-50%, -50%) scale(1) rotate(360deg);
       }
@@ -81,6 +84,7 @@
       0% {
         opacity: 0;
       }
+
       100% {
         opacity: 1;
       }
@@ -95,8 +99,10 @@
       border-radius: 50%;
       position: absolute;
       box-shadow: 0 0 6px 2px rgba(255, 122, 0, 0.35), inset 0 0 4px rgba(255, 122, 0, 0.4);
-      pointer-events: none; /* don't block interactions with the tray */
-      z-index: 5; /* sit above tray overlay */
+      pointer-events: none;
+      /* don't block interactions with the tray */
+      z-index: 5;
+      /* sit above tray overlay */
       animation: screwIn 0.8s ease both;
       animation-play-state: paused;
     }
@@ -176,13 +182,17 @@
           <span x-text="running ? 'Stop' : 'Run'"></span> </button>
         <!-- Heartbeat indicator -->
         <div class="relative">
-          <button @mouseenter="heartbeatHover=true" @mouseleave="heartbeatHover=false" class="w-9 h-9 rounded-full flex items-center justify-center bg-white text-gray-800 transition-colors"
+          <button @mouseenter="heartbeatHover=true" @mouseleave="heartbeatHover=false"
+            class="w-9 h-9 rounded-full flex items-center justify-center bg-white text-gray-800 transition-colors"
             :class="heartbeatActive ? 'bg-red-500 duration-1000' : 'bg-white duration-10000'" @click.prevent>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 text-current">
-              <path fill="currentColor" d="M12 21s-6.716-4.35-9.2-7.173C-1.1 8.598 4.25 3 8.4 5.4 10.2 6.5 12 9 12 9s1.8-2.5 3.6-3.6C19.75 3 25.1 8.598 21.2 13.827 18.716 16.65 12 21 12 21z" />
+              <path fill="currentColor"
+                d="M12 21s-6.716-4.35-9.2-7.173C-1.1 8.598 4.25 3 8.4 5.4 10.2 6.5 12 9 12 9s1.8-2.5 3.6-3.6C19.75 3 25.1 8.598 21.2 13.827 18.716 16.65 12 21 12 21z" />
             </svg>
           </button>
-          <div x-show="heartbeatHover" x-text="formatClock(lastHeartbeat)" class="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs bg-gray-800 text-white rounded px-2 py-1 shadow"></div>
+          <div x-show="heartbeatHover" x-text="formatClock(lastHeartbeat)"
+            class="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs bg-gray-800 text-white rounded px-2 py-1 shadow">
+          </div>
         </div>
         <button @click="connect()"
           class="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 transition font-medium focus:outline-none focus:ring-2 focus:ring-sg-accent/60"
@@ -354,12 +364,93 @@
                       class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded bg-sg-accent/15 border border-sg-accent/50 text-sg-accent">Active</span>
                   </div>
                 </div>
-                <p class="text-xs text-gray-400 leading-relaxed" x-text="ex.description || 'Custom pattern sandbox.'"></p>
+                <p class="text-xs text-gray-400 leading-relaxed" x-text="ex.description || 'Custom pattern sandbox.'">
+                </p>
               </button>
             </template>
             <template x-if="!filteredExampleScripts().length">
               <div class="py-6 text-center text-sm text-gray-500">No scripts match the current search.</div>
             </template>
+          </div>
+        </div>
+
+        <div class="bg-sg-panel/60 backdrop-blur rounded-xl p-5 border border-gray-700/50 shadow-inner-glow">
+          <h2 class="text-lg font-semibold mb-3">Sandscript reference</h2>
+
+          <div class="grid gap-3 text-xs text-gray-300 md:grid-cols-2 xl:grid-cols-3">
+            <div class="bg-gray-900/45 border border-gray-700/60 rounded px-3 py-3 space-y-1">
+              <h3 class="text-[11px] uppercase tracking-wide font-semibold text-sg-accent/80">Inputs</h3>
+              <ul class="space-y-1 text-gray-300">
+                <li><code class="font-mono text-sg-accent">radius</code> – current position in cm (0-10).</li>
+                <li><code class="font-mono text-sg-accent">angle</code> – current angle in degrees (wrapped 0–360).</li>
+                <li><code class="font-mono text-sg-accent">start</code> – 1 on restart, else 0.</li>
+                <li><code class="font-mono text-sg-accent">rev</code> – continuous revolutions (unwrapped angle ÷ 360).
+                </li>
+                <li><code class="font-mono text-sg-accent">steps</code> – evaluation counter (0-based).</li>
+                <li><code class="font-mono text-sg-accent">time</code> – milliseconds since script start.</li>
+              </ul>
+            </div>
+            <div class="bg-gray-900/45 border border-gray-700/60 rounded px-3 py-3 space-y-1">
+              <h3 class="text-[11px] uppercase tracking-wide font-semibold text-sg-accent/80">Outputs</h3>
+              <ul class="space-y-1 text-gray-300">
+                <li><code class="font-mono text-sg-accent">next_radius</code> – absolute target radius (cm).</li>
+                <li><code class="font-mono text-sg-accent">next_angle</code> – absolute target angle (deg).</li>
+                <li><code class="font-mono text-sg-accent">delta_radius</code> – offset added to current radius.</li>
+                <li><code class="font-mono text-sg-accent">delta_angle</code> – offset added to current angle.</li>
+                <li class="text-gray-400">Absolute assignment wins over delta on each axis.</li>
+              </ul>
+            </div>
+            <div class="bg-gray-900/45 border border-gray-700/60 rounded px-3 py-3 space-y-2">
+              <h3 class="text-[11px] uppercase tracking-wide font-semibold text-sg-accent/80">Operators</h3>
+              <div class="font-mono text-sg-accent/80">+ − × ÷ % ( )</div>
+              <ul class="space-y-1 text-gray-300">
+                <li><code>%</code> returns the floating remainder. If the divisor is 0 the result becomes NaN and halts
+                  the script.</li>
+                <li>Parentheses control precedence; expressions are evaluated left-to-right per operator precedence.
+                </li>
+              </ul>
+            </div>
+            <div
+              class="bg-gray-900/45 border border-gray-700/60 rounded px-3 py-3 space-y-2 md:col-span-2 xl:col-span-1">
+              <h3 class="text-[11px] uppercase tracking-wide font-semibold text-sg-accent/80">Functions</h3>
+              <div class="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-sg-accent/80">
+                <span>abs(x)</span>
+                <span>clamp(x,a,b)</span>
+                <span>cos(x)</span>
+                <span>sin(x)</span>
+                <span>tan(x)</span>
+                <span>sign(x)</span>
+                <span>min(a,b)</span>
+                <span>max(a,b)</span>
+                <span>pow(a,b)</span>
+                <span>sqrt(x)</span>
+                <span>exp(x)</span>
+                <span>random()</span>
+                <span>floor(x)</span>
+                <span>ceil(x)</span>
+                <span>round(x)</span>
+                <span class="col-span-2">pingpong(value, max)</span>
+              </div>
+              <p class="text-gray-400">Trig inputs are degrees. <code class="font-mono text-sg-accent">pingpong</code>
+                reflects between 0 and <code class="font-mono text-sg-accent">max</code>. <code
+                  class="font-mono text-sg-accent">random()</code> yields 0–1 and reseeds when <code
+                  class="font-mono text-sg-accent">start</code> is 1. <code class="font-mono text-sg-accent">floor</code>,
+                <code class="font-mono text-sg-accent">ceil</code>, and <code class="font-mono text-sg-accent">round</code>
+                operate on the final floating value.</p>
+            </div>
+            <div class="bg-gray-900/45 border border-gray-700/60 rounded px-3 py-3 space-y-2 md:col-span-2">
+              <h3 class="text-[11px] uppercase tracking-wide font-semibold text-sg-accent/80">Syntax & Behaviour Notes
+              </h3>
+              <ul class="space-y-1 text-gray-300">
+                <li>All expressions run per evaluation; locals reset each run.</li>
+                <li>Radius is clamped to tray limits, angle wraps 0–360 after evaluation.</li>
+                <li>Any NaN or ±Inf in outputs stops the preview/device and reports a fault mask.</li>
+                <li><code class="font-mono text-sg-accent">tan</code> approaches ±∞ near odd multiples of 90°; consider
+                  <code class="font-mono text-sg-accent">clamp</code> if needed.</li>
+                <li>Continuous revolution tracking feeds <code class="font-mono text-sg-accent">rev</code>; combine with
+                  trig for long-form patterns.</li>
+              </ul>
+            </div>
           </div>
         </div>
       </section>
@@ -416,25 +507,12 @@
                 class="ml-auto text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600"
                 x-text="showDSLDetails ? 'Hide Details' : 'Show Details'"></button>
             </div>
-            <p class="text-xs text-gray-400 leading-relaxed">Assign <code
-                        class='font-mono text-sg-accent'>next_radius</code>, <code
-                        class='font-mono text-sg-accent'>next_angle</code>, <code
-                        class='font-mono text-sg-accent'>delta_radius</code>, <code
-                        class='font-mono text-sg-accent'>delta_angle</code>. Inputs: <code class='font-mono'>radius</code>,
-                      <code class='font-mono'>angle</code>, <code class='font-mono'>steps</code>, <code
-                        class='font-mono'>time</code>, <code class='font-mono'>start</code>, <code
-                        class='font-mono'>rev</code>. Operators: <code
-                        class='font-mono'>+ - * / %</code>. Functions: <code class='font-mono'>sin cos abs clamp sign pingpong</code>.
-                      Trig
-                      uses degrees. <span class="text-sg-accent/80">steps</span> = evaluation count since start (0-based), <span
-                        class="text-sg-accent/80">time</span> = ms since script start (approx in browser). <span
-                        class='text-sg-accent/80'>a % b</span> returns remainder (b==0 → 0). The function pingpong(value,max) returns a
-                      triangular/ping-pong waveform between 0 and max (max must be provided).
-                    </p>
+
             <div
               class="text-xs text-gray-400 bg-gray-900/50 border border-gray-700/60 rounded px-3 py-2 flex items-center gap-2">
               <span class="font-medium text-sg-accent/80">Live Preview</span>
-              <span class="flex-1">Edits are compiled and emulated automatically. Browse the Sandscript Library below to load
+              <span class="flex-1">Edits are compiled and emulated automatically. Browse the Sandscript Library below to
+                load
                 presets.</span>
             </div>
             <div class="flex gap-3 items-start">
@@ -529,6 +607,21 @@
                     <p class="italic text-gray-500">(no locals)</p>
                   </template>
                 </div>
+                <div class="sm:col-span-2" x-show="dslFault">
+                  <div class="bg-red-900/30 border border-red-500/40 rounded p-3 space-y-2">
+                    <div class="font-semibold text-red-200 text-sm uppercase tracking-wide">Runtime fault</div>
+                    <div class="text-xs text-red-100 font-mono"
+                      x-text="dslFault?.names?.length ? dslFault.names.join(', ') : 'unknown output'"></div>
+                    <template x-if="dslFault?.values && Object.keys(dslFault.values).length">
+                      <ul class="text-xs font-mono space-y-0.5">
+                        <template x-for="(v,k) in dslFault.values" :key="k">
+                          <li><span class="text-gray-300" x-text="k"></span>: <span x-text="formatFaultValue(v)"></span>
+                          </li>
+                        </template>
+                      </ul>
+                    </template>
+                  </div>
+                </div>
                 <div class="sm:col-span-2 border-t border-gray-800 pt-3">
                   <div class="flex flex-wrap items-center gap-3 mb-2">
                     <h4 class="font-semibold text-sg-accent">Device Step Telemetry</h4>
@@ -618,8 +711,8 @@
         debugPoints: [],
         debugMaxPoints: 8000,
         deviceSimToleranceSteps: 2,
-  deviceStepsPerMm: 70,
-  deviceStepsPerCm: 70 * 10,
+        deviceStepsPerMm: 70,
+        deviceStepsPerCm: 70 * 10,
         debugLastCanvasPoint: null,
         debugSimulationPoints: [],
         lastDebugStep: null,
@@ -628,10 +721,10 @@
         trayRadiusFactor: 0.48,
         // Telemetry state
         joy: { a: 0, r: 0, mag: 0 }, lastState: { pat: null, auto: null, run: null, brt: null }, heartbeatCount: 0,
-  // Heartbeat UI state
-  heartbeatActive: false,
-  lastHeartbeat: null,
-  heartbeatHover: false,
+        // Heartbeat UI state
+        heartbeatActive: false,
+        lastHeartbeat: null,
+        heartbeatHover: false,
         patternMeta: [
           // Added pointsTarget to guide simulation length (approx, can tweak)
           { id: 1, type: 'builtin', name: 'Simple Spiral', short: 'spiral', description: 'Outward then inward spiral path (firmware logic).', pointsTarget: 4500 },
@@ -759,6 +852,9 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
         showDSLDetails: false,
         lastDSLInputs: null,
         lastDSLOutputs: null,
+        dslFault: null,
+        dslFaultActive: false,
+        lastFaultMessage: null,
         lastDSLLocals: null,
         // DSL temporal counters
         dslStepCounter: 0, // increments per DSL evaluation (pattern 11)
@@ -832,7 +928,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
         },
         updateFavicon() {
           if (!this.canvas) return;
-          
+
           try {
             // Create a temporary canvas for the favicon
             const faviconSize = 64; // Standard favicon size
@@ -841,13 +937,13 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
             tempCanvas.height = faviconSize;
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.filter = 'brightness(60%) contrast(7)';
-            
+
             // Draw the main canvas scaled down to favicon size
             tempCtx.drawImage(this.canvas, 0, 0, faviconSize, faviconSize);
-            
+
             // Convert to data URL (use JPEG for smaller size, with good quality)
             const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.85);
-            
+
             // Update the favicon link element
             let favicon = document.getElementById('favicon');
             if (!favicon) {
@@ -878,7 +974,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
               this.lastTs = 0; // ensure fresh timing
               this.simulationRunning = true;
               requestAnimationFrame(this.animateStep.bind(this));
-            } 
+            }
           }
         },
         resizeCanvas() {
@@ -949,6 +1045,68 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           });
         },
         setStatus(s) { this.statusMessage = s; this.log(s); },
+        faultMaskToNames(mask) {
+          if (!mask) return [];
+          const names = [];
+          for (const [name, bit] of Object.entries(DSG_OUTPUT_MASK)) {
+            if ((mask & bit) !== 0) names.push(name);
+          }
+          return names;
+        },
+        formatFaultValue(v) {
+          if (typeof v !== 'number') return '-';
+          if (Number.isNaN(v)) return 'NaN';
+          if (v === Infinity) return 'Infinity';
+          if (v === -Infinity) return '-Infinity';
+          if (!Number.isFinite(v)) return '-';
+          return this.fmtNum(v);
+        },
+        handleDslFault(result) {
+          if (!result) return;
+          const mask = result.faultMask >>> 0;
+          const names = this.faultMaskToNames(mask);
+          const faultValues = {};
+          if (result.faultValues) {
+            for (const [key, value] of Object.entries(result.faultValues)) {
+              faultValues[key] = value;
+            }
+          }
+          for (const name of names) {
+            if (!(name in faultValues) && result.outputs && Object.prototype.hasOwnProperty.call(result.outputs, name)) {
+              faultValues[name] = result.outputs[name];
+            }
+          }
+          this.dslFault = {
+            mask,
+            names,
+            values: faultValues,
+            outputs: { ...(result.outputs || {}) }
+          };
+          this.dslFaultActive = true;
+          if (this.simulationRunning) {
+            this.simulationRunning = false;
+          }
+          this.isRestarting = true;
+          if (this.compiledScript && this.compiledScript.runtime) {
+            this.compiledScript.runtime.faultMask = mask;
+            this.compiledScript.runtime.faultValues = { ...faultValues };
+          }
+          const summary = names.length ? names.join(', ') : 'unknown output';
+          if (!this.lastFaultMessage || this.lastFaultMessage.mask !== mask) {
+            this.setStatus('Sandscript fault (' + summary + ')');
+            this.lastFaultMessage = { mask, summary };
+          }
+        },
+        clearDslFault() {
+          if (!this.dslFaultActive && !this.dslFault) return;
+          this.dslFaultActive = false;
+          this.dslFault = null;
+          this.lastFaultMessage = null;
+          if (this.compiledScript && this.compiledScript.runtime) {
+            this.compiledScript.runtime.faultMask = 0;
+            this.compiledScript.runtime.faultValues = {};
+          }
+        },
         normalizeScript(code) {
           if (code == null) return '';
           return code.replace(/\r\n?/g, '\n').trim();
@@ -1416,6 +1574,30 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
 
           const outputs = evalResult?.outputs || {};
           const locals = evalResult?.locals || {};
+          this.lastDSLInputs = { ...vars };
+          this.lastDSLOutputs = { ...outputs };
+          this.lastDSLLocals = { ...locals };
+          if (Array.isArray(this.dslInputsSeq)) {
+            this.dslInputsSeq.push({ ...vars });
+            if (this.dslInputsSeq.length > this.debugMaxPoints) this.dslInputsSeq.shift();
+          }
+          if (Array.isArray(this.dslOutputsSeq)) {
+            this.dslOutputsSeq.push({ ...outputs });
+            if (this.dslOutputsSeq.length > this.debugMaxPoints) this.dslOutputsSeq.shift();
+          }
+          if (Array.isArray(this.dslLocalsSeq)) {
+            this.dslLocalsSeq.push({ ...locals });
+            if (this.dslLocalsSeq.length > this.debugMaxPoints) this.dslLocalsSeq.shift();
+          }
+
+          if (evalResult?.faultMask) {
+            const names = this.faultMaskToNames(evalResult.faultMask);
+            entry.simulationError = 'Fault: ' + (names.length ? names.join(', ') : evalResult.faultMask);
+            this.handleDslFault(evalResult);
+            return;
+          }
+          this.clearDslFault();
+
           const stepsPerCm = this.deviceStepsPerCm;
           const stepsPerRev = this.stepsPerARev;
           const maxRadiusCm = this.maxRadiusSteps / stepsPerCm;
@@ -1465,22 +1647,6 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
             entry.mismatchAngular = false;
           }
           this.appendDebugSimulationPoint(entry);
-          this.lastDSLInputs = { ...vars };
-          this.lastDSLOutputs = { ...outputs };
-          this.lastDSLLocals = { ...locals };
-
-          if (Array.isArray(this.dslInputsSeq)) {
-            this.dslInputsSeq.push({ ...vars });
-            if (this.dslInputsSeq.length > this.debugMaxPoints) this.dslInputsSeq.shift();
-          }
-          if (Array.isArray(this.dslOutputsSeq)) {
-            this.dslOutputsSeq.push({ ...outputs });
-            if (this.dslOutputsSeq.length > this.debugMaxPoints) this.dslOutputsSeq.shift();
-          }
-          if (Array.isArray(this.dslLocalsSeq)) {
-            this.dslLocalsSeq.push({ ...locals });
-            if (this.dslLocalsSeq.length > this.debugMaxPoints) this.dslLocalsSeq.shift();
-          }
         },
         stepsToCanvas(rSteps, aSteps) {
           if (!this.canvas || !Number.isFinite(rSteps) || !Number.isFinite(aSteps)) return null;
@@ -1905,21 +2071,22 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           this.isRestarting = true;
           this.points = []; // clear old points array (not used in new system)
           this.resetTrail();
-          
-          if (this.pattern !== 11) { 
-            this.dslInputsSeq = []; 
-            this.dslOutputsSeq = []; 
-            this.lastDSLInputs = null; 
-            this.lastDSLOutputs = null; 
-            this.dslStepCounter = 0; 
-            this.dslStartTimestamp = null; 
+          this.clearDslFault();
+
+          if (this.pattern !== 11) {
+            this.dslInputsSeq = [];
+            this.dslOutputsSeq = [];
+            this.lastDSLInputs = null;
+            this.lastDSLOutputs = null;
+            this.dslStepCounter = 0;
+            this.dslStartTimestamp = null;
           }
-          else { 
-            this.updateDSLDetails(); 
+          else {
+            this.updateDSLDetails();
           }
-          if (this.pattern !== 11) { 
-            this.dslLocalsSeq = []; 
-            this.lastDSLLocals = null; 
+          if (this.pattern !== 11) {
+            this.dslLocalsSeq = [];
+            this.lastDSLLocals = null;
           }
           this.drawBackground();
           this.renderFrame();
@@ -1928,26 +2095,26 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           // Alias for compatibility - now just re-initializes the pattern
           this.initializePattern();
         },
-        clearPattern() { 
+        clearPattern() {
           this.patternStepFn = null;
           this.currentPolarState = { radial: 0, angular: 0 };
           this.targetPolarState = { radial: 0, angular: 0 };
           this.animationProgress = 1;
-          this.points = []; 
-          this.resetTrail(); 
-          this.clearDebugTrail(); 
-          this.drawBackground(); 
-          this.renderFrame(); 
+          this.points = [];
+          this.resetTrail();
+          this.clearDebugTrail();
+          this.drawBackground();
+          this.renderFrame();
         },
-        resetTrail() { 
-          this.lastHeadX = null; 
-          this.lastHeadY = null; 
+        resetTrail() {
+          this.lastHeadX = null;
+          this.lastHeadY = null;
           this.lastTrenchX = null;
           this.lastTrenchY = null;
-          this.trailInitialized = false; 
-          this.ballPrevImage = null; 
-          this.ballPrevBox = null; 
-          this.accumulatedTrenchDistance = 0; 
+          this.trailInitialized = false;
+          this.ballPrevImage = null;
+          this.ballPrevBox = null;
+          this.accumulatedTrenchDistance = 0;
           this.lastRenderedProgress = 0;
         },
         clearDebugTrail() {
@@ -1958,27 +2125,27 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
             this.debugCtx.clearRect(0, 0, this.debugCanvas.width, this.debugCanvas.height);
           }
         },
-        toggleSimulation() { 
-          if (this.debugStepsEnabled) { 
-            this.simulationRunning = false; 
-            return; 
-          } 
-          this.simulationRunning = !this.simulationRunning; 
-          if (this.simulationRunning) { 
-            this.lastTs = 0; 
-            requestAnimationFrame(this.animateStep.bind(this)); 
-          } 
+        toggleSimulation() {
+          if (this.debugStepsEnabled) {
+            this.simulationRunning = false;
+            return;
+          }
+          this.simulationRunning = !this.simulationRunning;
+          if (this.simulationRunning) {
+            this.lastTs = 0;
+            requestAnimationFrame(this.animateStep.bind(this));
+          }
         },
         stepOnce() {
           if (this.debugStepsEnabled) return;
           if (this.simulationRunning) return; // disabled while running
           if (!this.patternStepFn) return;
-          
+
           // If we're at the target, generate next step
           if (this.animationProgress >= 1) {
             this.generateNextStep();
           }
-          
+
           // Move to the end of current animation
           this.animationProgress = 1;
           this.updateDSLDetails();
@@ -1986,20 +2153,20 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
         },
         animateStep(ts) {
           if (!this.simulationRunning) return;
-          if (!this.lastTs) this.lastTs = ts; 
-          const dt = (ts - this.lastTs) / 1000; 
+          if (!this.lastTs) this.lastTs = ts;
+          const dt = (ts - this.lastTs) / 1000;
           this.lastTs = ts;
-          
+
           if (!this.patternStepFn) {
             this.simulationRunning = false;
             return;
           }
-          
+
           // If we've reached the target, generate the next step
           if (this.animationProgress >= 1) {
             this.generateNextStep();
           }
-          
+
           // Calculate distance for this frame
           const segmentDistance = this.calculateSegmentDistance();
           if (segmentDistance > 0) {
@@ -2010,21 +2177,21 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
             // Zero distance segment, skip immediately
             this.animationProgress = 1;
           }
-          
+
           this.updateDSLDetails();
           this.renderFrame();
           requestAnimationFrame(this.animateStep.bind(this));
         },
         generateNextStep() {
           if (!this.patternStepFn) return;
-          
+
           // Current becomes previous target
           this.currentPolarState = { ...this.targetPolarState };
-          
+
           // Generate next target
           const nextTarget = this.patternStepFn(this.currentPolarState, this.isRestarting);
           this.isRestarting = false;
-          
+
           if (!nextTarget) {
             // Pattern exhausted, restart
             this.isRestarting = true;
@@ -2034,7 +2201,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
             this.drawBackground();
             return;
           }
-          
+
           this.targetPolarState = nextTarget;
           this.animationProgress = 0;
           this.lastRenderedProgress = 0; // Reset for new segment
@@ -2044,33 +2211,33 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           // Calculate polar distance from current to target
           const MAX_R_STEPS = 7000;
           const STEPS_PER_A_AXIS_REV = 2 * 2048;
-          
+
           const r0 = this.currentPolarState.radial;
           const r1 = this.targetPolarState.radial;
           const a0 = this.currentPolarState.angular;
           const a1 = this.targetPolarState.angular;
-          
+
           // Compute angular difference (shortest path) - FIX: proper wrapping
           let dθSteps = a1 - a0;
           const halfRev = STEPS_PER_A_AXIS_REV / 2;
           while (dθSteps > halfRev) dθSteps -= STEPS_PER_A_AXIS_REV;
           while (dθSteps < -halfRev) dθSteps += STEPS_PER_A_AXIS_REV;
-          
+
           const dr = r1 - r0;
-          
+
           // Convert angular steps to canvas pixels for distance calculation
           // Use average radius for arc length
           const avgRadius = (r0 + r1) / 2;
           const trayRadiusPx = this.canvas ? this.canvas.width * this.trayRadiusFactor : 400;
           const avgRadiusPx = (avgRadius / MAX_R_STEPS) * trayRadiusPx;
-          
+
           // Arc distance in pixels
           const angleRad = (dθSteps / STEPS_PER_A_AXIS_REV) * 2 * Math.PI;
           const arcDistPx = avgRadiusPx * Math.abs(angleRad);
-          
+
           // Radial distance in pixels
           const radialDistPx = (Math.abs(dr) / MAX_R_STEPS) * trayRadiusPx;
-          
+
           // Combined distance (Pythagorean)
           return Math.hypot(radialDistPx, arcDistPx);
         },
@@ -2089,48 +2256,48 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
         },
         renderFrame() {
           const ctx = this.ctx;
-          if (!this.trailInitialized) { 
-            this.drawBackground(); 
-            this.trailInitialized = true; 
+          if (!this.trailInitialized) {
+            this.drawBackground();
+            this.trailInitialized = true;
           }
-          
+
           if (!this.patternStepFn) return;
-          
+
           // Calculate interpolated position between current and target
           const t = this.animationProgress >= 1 ? 1 : this.animationProgress;
-          
+
           // Interpolate in polar coordinates
           const r0 = this.currentPolarState.radial;
           const r1 = this.targetPolarState.radial;
           const a0 = this.currentPolarState.angular;
           const a1 = this.targetPolarState.angular;
-          
+
           const STEPS_PER_A_AXIS_REV = 2 * 2048;
-          
+
           // Angular interpolation (shortest path)
           let dθSteps = a1 - a0;
           const halfRev = STEPS_PER_A_AXIS_REV / 2;
           while (dθSteps > halfRev) dθSteps -= STEPS_PER_A_AXIS_REV;
           while (dθSteps < -halfRev) dθSteps += STEPS_PER_A_AXIS_REV;
-          
+
           // Previous position (where we last drew)
           const prevR = r0 + (r1 - r0) * this.lastRenderedProgress;
           const prevA = a0 + dθSteps * this.lastRenderedProgress;
           const prevPt = this.polarToCanvas(prevR, prevA);
-          
+
           // Current position
           const currentR = r0 + (r1 - r0) * t;
           const currentA = a0 + dθSteps * t;
           const pt = this.polarToCanvas(currentR, currentA);
-          
+
           if (!pt) return;
-          
+
           const hx = pt.x;
           const hy = pt.y;
-          
+
           // Draw trench: only when we've moved a sufficient distance from last trench position
           const trenchStampSpacing = this.ballRadiusPx * this.trenchStampSpacingFactor;
-          
+
           if (this.lastTrenchX == null || this.lastTrenchY == null) {
             // Very first stamp
             this.drawTrenchStamp(hx, hy);
@@ -2141,7 +2308,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
             const dx = hx - this.lastTrenchX;
             const dy = hy - this.lastTrenchY;
             const distanceSinceLastTrench = Math.hypot(dx, dy);
-            
+
             // Draw trench segment if we've moved enough distance
             if (distanceSinceLastTrench >= trenchStampSpacing * 0.8) {
               this.drawTrenchSegment(this.lastTrenchX, this.lastTrenchY, hx, hy);
@@ -2149,12 +2316,12 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
               this.lastTrenchY = hy;
             }
           }
-          
+
           // Update tracking variables for ball position
           this.lastRenderedProgress = t;
-          this.lastHeadX = hx; 
+          this.lastHeadX = hx;
           this.lastHeadY = hy;
-          
+
           // Always restore previous ball and draw new ball position (for smooth animation)
           const ballR = this.ballRadiusPx;
           if (this.ballPrevImage && this.ballPrevBox) {
@@ -2170,15 +2337,15 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           const cx = size / 2;
           const cy = size / 2;
           const trayR = size * this.trayRadiusFactor;
-          
+
           const clampedR = Math.max(0, Math.min(MAX_R_STEPS, rSteps));
           const rNorm = clampedR / MAX_R_STEPS;
           const rPx = rNorm * trayR;
           const theta = -(aSteps / STEPS_PER_A_AXIS_REV) * (Math.PI * 2);
-          
-          return { 
-            x: cx + rPx * Math.cos(theta), 
-            y: cy + rPx * Math.sin(theta) 
+
+          return {
+            x: cx + rPx * Math.cos(theta),
+            y: cy + rPx * Math.sin(theta)
           };
         },
         exportImage() {
@@ -2201,8 +2368,8 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
         },
         // Pattern generator factories (return step functions for on-the-fly generation)
         createPatternStepFunction(id) {
-          const MAX_R_STEPS = 7000; 
-          const STEPS_PER_MOTOR_REV = 2048; 
+          const MAX_R_STEPS = 7000;
+          const STEPS_PER_MOTOR_REV = 2048;
           const STEPS_PER_A_AXIS_REV = 2 * STEPS_PER_MOTOR_REV;
 
           // --- Math helpers mirroring firmware ---
@@ -2448,15 +2615,31 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
                 }
                 const rev = this.revUnwrappedAngleDeg / 360;
                 const timeMs = this.dslStartTimestamp != null ? (performance.now() - this.dslStartTimestamp) : 0;
+                if (restart) {
+                  this.clearDslFault();
+                }
+                if (!restart && this.dslFaultActive) {
+                  return current;
+                }
                 const vars = { radius: currentRadiusCm, angle: currentAngleDeg, start: restart ? 1 : 0, rev, steps: this.dslStepCounter, time: timeMs };
                 const res = evalDSLCompiled(this.compiledScript, vars, true);
-                const values = res.outputs; const locals = res.locals;
-                this.lastDSLInputs = vars; this.lastDSLOutputs = values; this.lastDSLLocals = locals;
+                const values = res.outputs || {};
+                const locals = res.locals || {};
+                this.lastDSLInputs = { ...vars };
+                this.lastDSLOutputs = { ...values };
+                this.lastDSLLocals = { ...locals };
                 // Store copies for later simulation detail lookup
                 this.dslInputsSeq.push({ ...vars });
+                if (this.dslInputsSeq.length > this.debugMaxPoints) this.dslInputsSeq.shift();
                 this.dslOutputsSeq.push({ ...values });
+                if (this.dslOutputsSeq.length > this.debugMaxPoints) this.dslOutputsSeq.shift();
                 this.dslLocalsSeq.push({ ...locals });
-                this.dslStepCounter++;
+                if (this.dslLocalsSeq.length > this.debugMaxPoints) this.dslLocalsSeq.shift();
+                if (res.faultMask) {
+                  this.handleDslFault(res);
+                  return current;
+                }
+                this.clearDslFault();
                 function has(v) { return v != null && isFinite(v); }
                 let outRadiusCm = currentRadiusCm;
                 if (has(values.next_radius)) outRadiusCm = values.next_radius; else if (has(values.delta_radius)) outRadiusCm = currentRadiusCm + values.delta_radius;
@@ -2466,6 +2649,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
                 outAngleDeg = ((outAngleDeg % 360) + 360) % 360;
                 const radialSteps = Math.max(0, Math.min(MAX_R_STEPS, Math.round(outRadiusCm * stepsPerCm)));
                 const angleSteps = Math.round(outAngleDeg * degToSteps) % stepsPerRev;
+                this.dslStepCounter++;
                 return { radial: radialSteps, angular: angleSteps };
               };
             }
@@ -2485,12 +2669,65 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
     }
 
     // -------- DSL Compiler & Evaluator (Unified) --------
-  const DSG_OP = { CONST: 'CONST', LOAD: 'LOAD', ADD: 'ADD', SUB: 'SUB', MUL: 'MUL', DIV: 'DIV', MOD: 'MOD', NEG: 'NEG', SIN: 'SIN', COS: 'COS', ABS: 'ABS', CLAMP: 'CLAMP', SIGN: 'SIGN', PINGPONG: 'PINGPONG', END: 'END' };
+    const DSG_OP = {
+      CONST: 'CONST',
+      LOAD: 'LOAD',
+      ADD: 'ADD',
+      SUB: 'SUB',
+      MUL: 'MUL',
+      DIV: 'DIV',
+      MOD: 'MOD',
+      NEG: 'NEG',
+      SIN: 'SIN',
+      COS: 'COS',
+      TAN: 'TAN',
+      ABS: 'ABS',
+      CLAMP: 'CLAMP',
+      SIGN: 'SIGN',
+      PINGPONG: 'PINGPONG',
+      MIN: 'MIN',
+      MAX: 'MAX',
+      POW: 'POW',
+      SQRT: 'SQRT',
+      EXP: 'EXP',
+      RANDOM: 'RANDOM',
+      FLOOR: 'FLOOR',
+      CEIL: 'CEIL',
+      ROUND: 'ROUND',
+      END: 'END'
+    };
     // Added synthetic inputs: rev (angle/360 unwrapped), steps (evaluation counter), time (ms since script start)
     const DSG_INPUTS = ['radius', 'angle', 'start', 'rev', 'steps', 'time'];
     const DSG_OUTPUTS = ['next_radius', 'next_angle', 'delta_radius', 'delta_angle'];
-  const DSG_FUNCS = { sin: 1, cos: 1, abs: 1, clamp: 3, sign: 1, pingpong: 2 };
+    const DSG_FUNCS = {
+      sin: 1,
+      cos: 1,
+      tan: 1,
+      abs: 1,
+      clamp: 3,
+      sign: 1,
+      pingpong: 2,
+      min: 2,
+      max: 2,
+      pow: 2,
+      sqrt: 1,
+      exp: 1,
+      random: 0,
+      floor: 1,
+      ceil: 1,
+      round: 1
+    };
     const DSG_CONSTS = {};
+    const DSG_OUTPUT_MASK = {
+      next_radius: 0x01,
+      next_angle: 0x02,
+      delta_radius: 0x04,
+      delta_angle: 0x08
+    };
+
+    function psgRandomNext(state) {
+      return (state * 1664525 + 1013904223) >>> 0;
+    }
 
     function tokenizeDSL(source) {
       const lines = source.replace(/\r\n?/g, '\n').split(/\n/); const tokens = []; let global = 0; const errors = [];
@@ -2520,7 +2757,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
     }
     function compileDSL(source) {
       const { tokens, errors } = tokenizeDSL(source); if (errors.length) return { ok: false, errors };
-      let idx = 0; const assignments = {}; const usedOrder = []; const definedOutputs = new Set(); const localVars = new Set();
+      let idx = 0; const assignments = {}; const usedOrder = []; const definedOutputs = new Set(); const localVars = new Set(); let usedMask = 0;
       const peek = () => tokens[idx]; const consume = t => { const tk = peek(); if (!tk || tk.type !== t) { errors.push({ message: 'Expected ' + t, pos: tk ? tk.pos : -1 }); return null; } idx++; return tk; };
       function parseExpression() {
         const output = []; const stack = []; let expectValue = true; const prec = o => (o === '+' || o === '-') ? 1 : ((o === '*' || o === '/' || o === '%') ? 2 : 0); const isOp = t => ['+', '-', '*', '/', '%'].includes(t);
@@ -2539,8 +2776,71 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
         while (peek() && peek().type === 'EOL') idx++;
         return output;
       }
-      function rpnToBytecode(rpn, definedLocals) { const bc = []; for (const tk of rpn) { if (!tk) continue; if (tk.type === 'NUMBER') { bc.push({ op: DSG_OP.CONST, v: tk.value }); continue; } if (tk.type === 'IDENT') { const nm = tk.value; if (DSG_CONSTS[nm] != null) { bc.push({ op: DSG_OP.CONST, v: DSG_CONSTS[nm] }); continue; } if (DSG_FUNCS[nm] != null) { switch (nm) { case 'sin': bc.push({ op: DSG_OP.SIN }); break; case 'cos': bc.push({ op: DSG_OP.COS }); break; case 'abs': bc.push({ op: DSG_OP.ABS }); break; case 'clamp': bc.push({ op: DSG_OP.CLAMP }); break; case 'sign': bc.push({ op: DSG_OP.SIGN }); break; } continue; } if (DSG_INPUTS.includes(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (DSG_OUTPUTS.includes(nm)) { if (!definedOutputs.has(nm)) { errors.push({ message: 'Output ' + nm + ' used before it is assigned earlier in script', pos: tk.pos }); } bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (definedLocals.has(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } errors.push({ message: 'Unknown identifier ' + nm, pos: tk.pos }); continue; } if (['+', '-', '*', '/', '%'].includes(tk.type)) { bc.push({ op: { '+': DSG_OP.ADD, '-': DSG_OP.SUB, '*': DSG_OP.MUL, '/': DSG_OP.DIV, '%': DSG_OP.MOD }[tk.type] }); continue; } if (tk.type === 'NEG') { bc.push({ op: DSG_OP.NEG }); continue; } } bc.push({ op: DSG_OP.END }); return bc; }
-    function rpnToBytecode(rpn, definedLocals) { const bc = []; for (const tk of rpn) { if (!tk) continue; if (tk.type === 'NUMBER') { bc.push({ op: DSG_OP.CONST, v: tk.value }); continue; } if (tk.type === 'IDENT') { const nm = tk.value; if (DSG_CONSTS[nm] != null) { bc.push({ op: DSG_OP.CONST, v: DSG_CONSTS[nm] }); continue; } if (DSG_FUNCS[nm] != null) { switch (nm) { case 'sin': bc.push({ op: DSG_OP.SIN }); break; case 'cos': bc.push({ op: DSG_OP.COS }); break; case 'abs': bc.push({ op: DSG_OP.ABS }); break; case 'clamp': bc.push({ op: DSG_OP.CLAMP }); break; case 'sign': bc.push({ op: DSG_OP.SIGN }); break; case 'pingpong': bc.push({ op: DSG_OP.PINGPONG }); break; } continue; } if (DSG_INPUTS.includes(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (DSG_OUTPUTS.includes(nm)) { if (!definedOutputs.has(nm)) { errors.push({ message: 'Output ' + nm + ' used before it is assigned earlier in script', pos: tk.pos }); } bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } if (definedLocals.has(nm)) { bc.push({ op: DSG_OP.LOAD, v: nm }); continue; } errors.push({ message: 'Unknown identifier ' + nm, pos: tk.pos }); continue; } if (['+', '-', '*', '/', '%'].includes(tk.type)) { bc.push({ op: { '+': DSG_OP.ADD, '-': DSG_OP.SUB, '*': DSG_OP.MUL, '/': DSG_OP.DIV, '%': DSG_OP.MOD }[tk.type] }); continue; } if (tk.type === 'NEG') { bc.push({ op: DSG_OP.NEG }); continue; } } bc.push({ op: DSG_OP.END }); return bc; }
+      function rpnToBytecode(rpn, definedLocals) {
+        const bc = [];
+        for (const tk of rpn) {
+          if (!tk) continue;
+          if (tk.type === 'NUMBER') {
+            bc.push({ op: DSG_OP.CONST, v: tk.value });
+            continue;
+          }
+          if (tk.type === 'IDENT') {
+            const nm = tk.value;
+            if (DSG_CONSTS[nm] != null) {
+              bc.push({ op: DSG_OP.CONST, v: DSG_CONSTS[nm] });
+              continue;
+            }
+            if (DSG_FUNCS[nm] != null) {
+              switch (nm) {
+                case 'sin': bc.push({ op: DSG_OP.SIN }); break;
+                case 'cos': bc.push({ op: DSG_OP.COS }); break;
+                case 'tan': bc.push({ op: DSG_OP.TAN }); break;
+                case 'abs': bc.push({ op: DSG_OP.ABS }); break;
+                case 'clamp': bc.push({ op: DSG_OP.CLAMP }); break;
+                case 'sign': bc.push({ op: DSG_OP.SIGN }); break;
+                case 'pingpong': bc.push({ op: DSG_OP.PINGPONG }); break;
+                case 'min': bc.push({ op: DSG_OP.MIN }); break;
+                case 'max': bc.push({ op: DSG_OP.MAX }); break;
+                case 'pow': bc.push({ op: DSG_OP.POW }); break;
+                case 'sqrt': bc.push({ op: DSG_OP.SQRT }); break;
+                case 'exp': bc.push({ op: DSG_OP.EXP }); break;
+                case 'random': bc.push({ op: DSG_OP.RANDOM }); break;
+                case 'floor': bc.push({ op: DSG_OP.FLOOR }); break;
+                case 'ceil': bc.push({ op: DSG_OP.CEIL }); break;
+                case 'round': bc.push({ op: DSG_OP.ROUND }); break;
+              }
+              continue;
+            }
+            if (DSG_INPUTS.includes(nm)) {
+              bc.push({ op: DSG_OP.LOAD, v: nm });
+              continue;
+            }
+            if (DSG_OUTPUTS.includes(nm)) {
+              if (!definedOutputs.has(nm)) {
+                errors.push({ message: 'Output ' + nm + ' used before it is assigned earlier in script', pos: tk.pos });
+              }
+              bc.push({ op: DSG_OP.LOAD, v: nm });
+              continue;
+            }
+            if (definedLocals.has(nm)) {
+              bc.push({ op: DSG_OP.LOAD, v: nm });
+              continue;
+            }
+            errors.push({ message: 'Unknown identifier ' + nm, pos: tk.pos });
+            continue;
+          }
+          if (['+', '-', '*', '/', '%'].includes(tk.type)) {
+            bc.push({ op: { '+': DSG_OP.ADD, '-': DSG_OP.SUB, '*': DSG_OP.MUL, '/': DSG_OP.DIV, '%': DSG_OP.MOD }[tk.type] });
+            continue;
+          }
+          if (tk.type === 'NEG') {
+            bc.push({ op: DSG_OP.NEG });
+            continue;
+          }
+        }
+        bc.push({ op: DSG_OP.END });
+        return bc;
+      }
       while (idx < tokens.length && !errors.length) {
         // skip stray EOLs
         while (peek() && peek().type === 'EOL') idx++;
@@ -2552,6 +2852,7 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           const bc = rpnToBytecode(rpn, localVars);
           if (DSG_OUTPUTS.includes(name)) {
             assignments[name] = bc; if (!usedOrder.includes(name)) usedOrder.push(name); definedOutputs.add(name);
+            usedMask |= DSG_OUTPUT_MASK[name] || 0;
           } else if (DSG_INPUTS.includes(name)) {
             errors.push({ message: 'Cannot assign to read-only input ' + name, pos: lhs.pos }); break;
           }
@@ -2562,52 +2863,211 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
           errors.push({ message: 'Unexpected token', pos: lhs.pos }); break;
         }
       }
-      if (!usedOrder.length && !errors.length) errors.push({ message: 'No assignments found', pos: 0 }); if (errors.length) return { ok: false, errors }; return { ok: true, script: { assignments, used: usedOrder, locals: [...localVars] } };
+      if (!usedOrder.length && !errors.length) errors.push({ message: 'No assignments found', pos: 0 });
+      if (errors.length) return { ok: false, errors };
+      return {
+        ok: true,
+        script: {
+          assignments,
+          used: usedOrder,
+          locals: [...localVars],
+          usedMask,
+          runtime: {
+            randomInitialized: false,
+            randomState: 0,
+            faultMask: 0,
+            faultValues: {}
+          }
+        }
+      };
     }
-    function evalDSLCompiled(compiled, baseVars, collectLocals = false) {
-      // Evaluate in source order so later outputs can reference earlier outputs.
-      const env = { ...baseVars }; const out = {}; const localsSnapshot = collectLocals ? {} : null;
+    function evalDSLCompiled(compiled, baseVars = {}, collectLocals = false) {
+      if (!compiled) throw new Error('No compiled script to evaluate');
+      if (!compiled.runtime) {
+        compiled.runtime = { randomInitialized: false, randomState: 0, faultMask: 0, faultValues: {} };
+      }
+      const runtime = compiled.runtime;
+      if (baseVars && Number(baseVars.start)) {
+        runtime.randomInitialized = false;
+      }
+      runtime.faultMask = 0;
+      runtime.faultValues = {};
+
+      const env = { ...baseVars };
+      const out = {};
+      const localsSnapshot = collectLocals ? {} : null;
+      const toRadians = deg => deg * Math.PI / 180;
+      const isFiniteNum = v => typeof v === 'number' && Number.isFinite(v);
+
+      const ensureRandomSeeded = () => {
+        if (runtime.randomInitialized) return;
+        let seed = 0;
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+          const buf = new Uint32Array(1);
+          crypto.getRandomValues(buf);
+          seed = buf[0] >>> 0;
+        } else {
+          seed = Math.floor(Math.random() * 0xFFFFFFFF) >>> 0;
+        }
+        if (seed === 0) {
+          const timePart = Math.floor((typeof performance !== 'undefined' ? performance.now() : Date.now())) & 0xFFFFFFFF;
+          const radiusPart = Math.floor((Number(baseVars?.radius) || 0) * 65536) & 0xFFFFFFFF;
+          seed = ((timePart << 16) ^ radiusPart ^ 0xA5A5A5A5) >>> 0;
+        }
+        if (seed === 0) seed = 0x9E3779B9; // last-resort non-zero seed
+        runtime.randomState = seed >>> 0;
+        runtime.randomInitialized = true;
+      };
+
+      const nextRandomUnit = () => {
+        ensureRandomSeeded();
+        runtime.randomState = psgRandomNext(runtime.randomState) >>> 0;
+        const mantissa = (runtime.randomState >>> 8) & 0x00FFFFFF;
+        return mantissa / 16777216;
+      };
+
       function run(bc) {
         const st = [];
         for (const ins of bc) {
           switch (ins.op) {
             case DSG_OP.CONST: st.push(ins.v); break;
             case DSG_OP.LOAD: st.push(env[ins.v] ?? 0); break;
-            case DSG_OP.ADD: { const b = st.pop(), a = st.pop(); st.push(a + b); break; }
-            case DSG_OP.SUB: { const b = st.pop(), a = st.pop(); st.push(a - b); break; }
-            case DSG_OP.MUL: { const b = st.pop(), a = st.pop(); st.push(a * b); break; }
-            case DSG_OP.DIV: { const b = st.pop(), a = st.pop(); st.push(b === 0 ? 0 : a / b); break; }
-            case DSG_OP.MOD: { const b = st.pop(), a = st.pop(); st.push(b === 0 ? 0 : a % b); break; }
-            case DSG_OP.NEG: { const a = st.pop(); st.push(-a); break; }
-            case DSG_OP.SIN: { const a = st.pop(); st.push(Math.sin(a * Math.PI / 180)); break; } // degree-based
-            case DSG_OP.COS: { const a = st.pop(); st.push(Math.cos(a * Math.PI / 180)); break; } // degree-based
-            case DSG_OP.ABS: { const a = st.pop(); st.push(Math.abs(a)); break; }
-            case DSG_OP.CLAMP: { const c = st.pop(), b = st.pop(), a = st.pop(); st.push(Math.min(Math.max(a, b), c)); break; }
-            case DSG_OP.SIGN: { const a = st.pop(); st.push(a > 0 ? 1 : (a < 0 ? -1 : 0)); break; }
-            case DSG_OP.PINGPONG: {
-              const max = st.pop(); const v = st.pop();
-              if (!isFinite(max) || max <= 0) { st.push(0); break; }
-              let t = v % (2 * max);
-              if (t < 0) t += 2 * max;
-              st.push(t <= max ? t : 2 * max - t);
+            case DSG_OP.ADD: { const b = st.pop(); const a = st.pop(); st.push((a ?? 0) + (b ?? 0)); break; }
+            case DSG_OP.SUB: { const b = st.pop(); const a = st.pop(); st.push((a ?? 0) - (b ?? 0)); break; }
+            case DSG_OP.MUL: { const b = st.pop(); const a = st.pop(); st.push((a ?? 0) * (b ?? 0)); break; }
+            case DSG_OP.DIV: { const b = st.pop(); const a = st.pop(); st.push((a ?? 0) / (b ?? 0)); break; }
+            case DSG_OP.MOD: { const b = st.pop(); const a = st.pop(); st.push((a ?? 0) % (b ?? 0)); break; }
+            case DSG_OP.NEG: { const a = st.pop(); st.push(-(a ?? 0)); break; }
+            case DSG_OP.SIN: { const a = st.pop(); st.push(Math.sin(toRadians(a ?? 0))); break; }
+            case DSG_OP.COS: { const a = st.pop(); st.push(Math.cos(toRadians(a ?? 0))); break; }
+            case DSG_OP.TAN: { const a = st.pop(); st.push(Math.tan(toRadians(a ?? 0))); break; }
+            case DSG_OP.ABS: { const a = st.pop(); st.push(Math.abs(a ?? 0)); break; }
+            case DSG_OP.CLAMP: {
+              const maxV = st.pop();
+              const minV = st.pop();
+              const val = st.pop();
+              st.push(Math.min(Math.max(val ?? 0, minV ?? 0), maxV ?? 0));
               break;
             }
-            case DSG_OP.END: return st.pop() || 0;
+            case DSG_OP.SIGN: {
+              const a = st.pop() ?? 0;
+              let outSign = 0;
+              if (a > 1e-6) outSign = 1;
+              else if (a < -1e-6) outSign = -1;
+              st.push(outSign);
+              break;
+            }
+            case DSG_OP.PINGPONG: {
+              const maxV = st.pop();
+              const v = st.pop();
+              if (!isFiniteNum(maxV) || maxV <= 0) { st.push(0); break; }
+              const period = 2 * maxV;
+              let t = (v ?? 0) % period;
+              if (t < 0) t += period;
+              st.push(t <= maxV ? t : (2 * maxV - t));
+              break;
+            }
+            case DSG_OP.MIN: { const b = st.pop(); const a = st.pop(); st.push(Math.min(a ?? 0, b ?? 0)); break; }
+            case DSG_OP.MAX: { const b = st.pop(); const a = st.pop(); st.push(Math.max(a ?? 0, b ?? 0)); break; }
+            case DSG_OP.POW: { const b = st.pop(); const a = st.pop(); st.push(Math.pow(a ?? 0, b ?? 0)); break; }
+            case DSG_OP.SQRT: { const a = st.pop(); st.push(Math.sqrt(a ?? 0)); break; }
+            case DSG_OP.EXP: { const a = st.pop(); st.push(Math.exp(a ?? 0)); break; }
+            case DSG_OP.FLOOR: { const a = st.pop(); st.push(Math.floor(a ?? 0)); break; }
+            case DSG_OP.CEIL: { const a = st.pop(); st.push(Math.ceil(a ?? 0)); break; }
+            case DSG_OP.ROUND: { const a = st.pop(); st.push(Math.round(a ?? 0)); break; }
+            case DSG_OP.RANDOM: { st.push(nextRandomUnit()); break; }
+            case DSG_OP.END: return st.length ? (st[st.length - 1] ?? 0) : 0;
           }
         }
-        return 0;
+        return st.length ? (st[st.length - 1] ?? 0) : 0;
       }
+
       for (const name of compiled.used) {
-        const val = run(compiled.assignments[name]);
-        out[name] = val; env[name] = val; // expose to subsequent expressions
-        if (collectLocals) {
-          // capture only non-output, non-input, non-duplicated locals (those in compiled.locals)
+        const expr = compiled.assignments[name];
+        if (!expr) continue;
+        const val = run(expr);
+        out[name] = val;
+        env[name] = val;
+        if (collectLocals && localsSnapshot) {
           for (const l of compiled.locals || []) {
-            if (env.hasOwnProperty(l)) localsSnapshot[l] = env[l];
+            if (Object.prototype.hasOwnProperty.call(env, l)) localsSnapshot[l] = env[l];
           }
         }
       }
-      return collectLocals ? { outputs: out, locals: localsSnapshot } : out;
+
+      const faultValues = {};
+      let faultMask = 0;
+      const usedMask = compiled.usedMask ?? 0;
+      const currentRadius = Number(baseVars?.radius) || 0;
+      const currentAngle = Number(baseVars?.angle) || 0;
+
+      if (usedMask & DSG_OUTPUT_MASK.next_radius) {
+        if (!isFiniteNum(out.next_radius)) {
+          faultMask |= DSG_OUTPUT_MASK.next_radius;
+          faultValues.next_radius = out.next_radius;
+        }
+      }
+      if (usedMask & DSG_OUTPUT_MASK.delta_radius) {
+        if (!isFiniteNum(out.delta_radius)) {
+          faultMask |= DSG_OUTPUT_MASK.delta_radius;
+          faultValues.delta_radius = out.delta_radius;
+        }
+      }
+      if (usedMask & DSG_OUTPUT_MASK.next_angle) {
+        if (!isFiniteNum(out.next_angle)) {
+          faultMask |= DSG_OUTPUT_MASK.next_angle;
+          faultValues.next_angle = out.next_angle;
+        }
+      }
+      if (usedMask & DSG_OUTPUT_MASK.delta_angle) {
+        if (!isFiniteNum(out.delta_angle)) {
+          faultMask |= DSG_OUTPUT_MASK.delta_angle;
+          faultValues.delta_angle = out.delta_angle;
+        }
+      }
+
+      let outRadius = currentRadius;
+      if (usedMask & DSG_OUTPUT_MASK.next_radius) {
+        outRadius = out.next_radius;
+      } else if (usedMask & DSG_OUTPUT_MASK.delta_radius) {
+        outRadius = currentRadius + out.delta_radius;
+      }
+      if (!isFiniteNum(outRadius)) {
+        if (usedMask & DSG_OUTPUT_MASK.next_radius) {
+          faultMask |= DSG_OUTPUT_MASK.next_radius;
+          if (faultValues.next_radius == null) faultValues.next_radius = outRadius;
+        } else if (usedMask & DSG_OUTPUT_MASK.delta_radius) {
+          faultMask |= DSG_OUTPUT_MASK.delta_radius;
+          if (faultValues.delta_radius == null) faultValues.delta_radius = outRadius;
+        }
+      }
+
+      let outAngle = currentAngle;
+      if (usedMask & DSG_OUTPUT_MASK.next_angle) {
+        outAngle = out.next_angle;
+      } else if (usedMask & DSG_OUTPUT_MASK.delta_angle) {
+        outAngle = currentAngle + out.delta_angle;
+      }
+      if (!isFiniteNum(outAngle)) {
+        if (usedMask & DSG_OUTPUT_MASK.next_angle) {
+          faultMask |= DSG_OUTPUT_MASK.next_angle;
+          if (faultValues.next_angle == null) faultValues.next_angle = outAngle;
+        } else if (usedMask & DSG_OUTPUT_MASK.delta_angle) {
+          faultMask |= DSG_OUTPUT_MASK.delta_angle;
+          if (faultValues.delta_angle == null) faultValues.delta_angle = outAngle;
+        }
+      }
+
+      runtime.faultMask = faultMask;
+      runtime.faultValues = faultValues;
+
+      const result = {
+        outputs: out,
+        faultMask,
+        faultValues
+      };
+      if (collectLocals) result.locals = localsSnapshot;
+      return result;
     }
     function formatBytecodeListing(bc) { return bc.map(ins => { if (ins.v != null) return ins.op + ' ' + ins.v; return ins.op; }).join('\n'); }
 
@@ -2629,10 +3089,12 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
             if (!res.ok) {
               this.compileErrors = res.errors.map(e => ({ message: enhanceErrorMessage(e.message), pos: e.pos }));
               this.compiledScript = null;
+              this.clearDslFault();
               return false;
             }
             this.compileErrors = [];
             this.compiledScript = res.script;
+            this.clearDslFault();
             return true;
           },
           useScriptPattern() { if (!this.compiledScript) return; this.pattern = 11; this.setStatus('Using custom script'); this.regeneratePattern(); },
@@ -2681,9 +3143,34 @@ next_angle = angle + (3 + sin(angle*2.5)*1.8) * dir`
             const rev = this.revUnwrappedAngleDeg / 360;
             const timeMs = this.dslStartTimestamp != null ? (performance.now() - this.dslStartTimestamp) : 0;
             const vars = { radius: currentRadiusCm, angle: currentAngleDeg, start: startFlag ? 1 : 0, rev, steps: this.dslStepCounter, time: timeMs };
+            if (startFlag) {
+              this.clearDslFault();
+            } else if (this.dslFaultActive) {
+              return current;
+            }
             const res = evalDSLCompiled(this.compiledScript, vars, true);
-            const values = res.outputs; const locals = res.locals;
-            this.lastDSLInputs = vars; this.lastDSLOutputs = values; this.lastDSLLocals = locals;
+            const values = res.outputs || {};
+            const locals = res.locals || {};
+            this.lastDSLInputs = { ...vars };
+            this.lastDSLOutputs = { ...values };
+            this.lastDSLLocals = { ...locals };
+            if (Array.isArray(this.dslInputsSeq)) {
+              this.dslInputsSeq.push({ ...vars });
+              if (this.dslInputsSeq.length > this.debugMaxPoints) this.dslInputsSeq.shift();
+            }
+            if (Array.isArray(this.dslOutputsSeq)) {
+              this.dslOutputsSeq.push({ ...values });
+              if (this.dslOutputsSeq.length > this.debugMaxPoints) this.dslOutputsSeq.shift();
+            }
+            if (Array.isArray(this.dslLocalsSeq)) {
+              this.dslLocalsSeq.push({ ...locals });
+              if (this.dslLocalsSeq.length > this.debugMaxPoints) this.dslLocalsSeq.shift();
+            }
+            if (res.faultMask) {
+              this.handleDslFault(res);
+              return current;
+            }
+            this.clearDslFault();
             this.dslStepCounter++;
             function has(v) { return v != null && isFinite(v); }
             let outRadiusCm = currentRadiusCm;

@@ -46,6 +46,16 @@ enum PSGOp : uint8_t {
   PSG_OP_CLAMP = 0x19,
   PSG_OP_PINGPONG = 0x1B,
   PSG_OP_SIGN  = 0x1A,
+  PSG_OP_MIN   = 0x1C,
+  PSG_OP_MAX   = 0x1D,
+  PSG_OP_POW   = 0x1E,
+  PSG_OP_SQRT  = 0x1F,
+  PSG_OP_TAN   = 0x20,
+  PSG_OP_EXP   = 0x21,
+  PSG_OP_RANDOM = 0x22,
+  PSG_OP_FLOOR = 0x23,
+  PSG_OP_CEIL  = 0x24,
+  PSG_OP_ROUND = 0x25,
   PSG_OP_END   = 0xFF
 };
 
@@ -95,6 +105,10 @@ struct PatternScriptRuntime {
   float unwrappedAngleDeg = 0.0f;
   uint32_t stepCounter = 0;
   uint32_t startMillis = 0;
+  bool faulted = false;
+  uint8_t faultMask = 0;
+  uint32_t randomState = 0;
+  bool randomInitialized = false;
 };
 
 struct PatternScriptUnits {

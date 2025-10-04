@@ -44,7 +44,8 @@ SandScript is a compact math Domain Specific Language (DSL) that produces the ne
 
 Assign any of these outputs to drive motion (values are always in cm/deg): `next_radius`, `next_angle`, `delta_radius`, `delta_angle`. You can also create local temporary variables just by naming them.
 
-Supported functions: `sin`, `cos` (degree-based), `abs`, `clamp(value, min, max)`, `sign`, `pingpong(value, max)`. Operators: `+ - * / %` plus parentheses and unary `-`. Comments begin with `#`.
+Supported functions: `sin`, `cos`, `tan` (degree-based), `abs`, `clamp(value, min, max)`, `sign`, `pingpong(value, max)`, `min(a, b)`, `max(a, b)`, `pow(a, b)`, `sqrt(x)`, `exp(x)`, `random()`, `floor(x)`, `ceil(x)`, `round(x)`. Operators: `+ - * / %` plus parentheses and unary `-`. Comments begin with `#`.
+`random()` emits values in `[0,1)` and reseeds whenever `start` is 1. `floor`, `ceil`, and `round` operate on the final floating-point value.
 
 Example script:
 ```
@@ -64,7 +65,7 @@ next_radius = pingpong(steps * 0.2, 6)
 next_radius = pingpong(time * 0.005, 4)
 ```
 
-<!-- pingpong documented above within supported functions and examples -->
+![Sandscript reference][sandscript-reference]
 
 ## Preview and upload from the browser
 1. Open `web-client.html` in Chrome or Edge (Web Bluetooth is required). No server is needed—double-clicking the file works.
@@ -198,5 +199,6 @@ You can adapt the handler to cycle through preset indices, or map other button e
 [sandscript-debug]: .docs/sandscript-debugging-and-device-reporting.png "Sandscript debugging & device reporting"
 [device-telemetry]: .docs/device-position-tracking-vs-local-step-simulation.png "Device position vs local simulation"
 [sandscript-language]: .docs/sandscript-pattern-scripting-language.png "Sandscript pattern scripting language"
+[sandscript-reference]: .docs/sandscript-reference.png "Sandscript language reference"
 
 

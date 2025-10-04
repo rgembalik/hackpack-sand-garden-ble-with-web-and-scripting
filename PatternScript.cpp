@@ -6,11 +6,18 @@
 #include <unordered_map>
 #include <cctype>
 #include <cstring>
+#ifdef ARDUINO_ARCH_ESP32
+#include <esp_random.h>
+#endif
 
 static PatternScriptUnits g_units = {};
 
 static inline float degToRad(float deg) {
   return deg * (float)M_PI / 180.0f;
+}
+
+static inline uint32_t psgRandomNext(uint32_t state) {
+  return state * 1664525u + 1013904223u;
 }
 
 void configurePatternScriptUnits(const PatternScriptUnits &units) {
@@ -162,7 +169,9 @@ static bool expectIdentifier(const std::string &id) {
 }
 
 static bool isFunctionName(const std::string &name) {
-  return name == "sin" || name == "cos" || name == "abs" || name == "clamp" || name == "sign" || name == "pingpong";
+  return name == "sin" || name == "cos" || name == "tan" || name == "abs" || name == "clamp" || name == "sign" || name == "pingpong" ||
+         name == "min" || name == "max" || name == "pow" || name == "sqrt" || name == "exp" || name == "random" ||
+         name == "floor" || name == "ceil" || name == "round";
 }
 
 static uint8_t maskForOutput(const std::string &name) {
@@ -176,16 +185,30 @@ static uint8_t maskForOutput(const std::string &name) {
 static PSGOp functionToOp(const std::string &fn) {
   if (fn == "sin") return PSG_OP_SIN;
   if (fn == "cos") return PSG_OP_COS;
+  if (fn == "tan") return PSG_OP_TAN;
   if (fn == "abs") return PSG_OP_ABS;
   if (fn == "clamp") return PSG_OP_CLAMP;
   if (fn == "sign") return PSG_OP_SIGN;
   if (fn == "pingpong") return PSG_OP_PINGPONG;
+  if (fn == "min") return PSG_OP_MIN;
+  if (fn == "max") return PSG_OP_MAX;
+  if (fn == "pow") return PSG_OP_POW;
+  if (fn == "sqrt") return PSG_OP_SQRT;
+  if (fn == "exp") return PSG_OP_EXP;
+  if (fn == "random") return PSG_OP_RANDOM;
+  if (fn == "floor") return PSG_OP_FLOOR;
+  if (fn == "ceil") return PSG_OP_CEIL;
+  if (fn == "round") return PSG_OP_ROUND;
   return PSG_OP_END;
 }
 
 static uint8_t expectedArgs(const std::string &fn) {
   if (fn == "clamp") return 3;
   if (fn == "pingpong") return 2;
+  if (fn == "min") return 2;
+  if (fn == "max") return 2;
+  if (fn == "pow") return 2;
+  if (fn == "random") return 0;
   return 1;
 }
 
@@ -677,6 +700,9 @@ Positions evalPatternScript(const PatternScript &ps, PatternScriptRuntime &rt, c
     return result;
   }
 
+  rt.faulted = false;
+  rt.faultMask = 0;
+
   float stepsPerCm = g_units.stepsPerCm > 0 ? g_units.stepsPerCm : 700.0f;
   float stepsPerDeg = g_units.stepsPerDeg > 0 ? g_units.stepsPerDeg : 11.377f;
   float maxRadiusCm = g_units.maxRadiusCm > 0 ? g_units.maxRadiusCm : 10.0f;
@@ -692,6 +718,7 @@ Positions evalPatternScript(const PatternScript &ps, PatternScriptRuntime &rt, c
     rt.unwrappedAngleDeg = angleDeg;
     rt.stepCounter = 0;
     rt.startMillis = nowMs;
+    rt.randomInitialized = false;
   } else {
     float deltaDeg = angleDeg - rt.prevAngleDeg;
     if (deltaDeg > 180.0f) deltaDeg -= 360.0f;
@@ -752,21 +779,13 @@ Positions evalPatternScript(const PatternScript &ps, PatternScriptRuntime &rt, c
         case PSG_OP_DIV: {
           float b = stack[--sp];
           float a = stack[--sp];
-          if (fabsf(b) < 1e-6f) {
-            stack[sp++] = 0.0f;
-          } else {
-            stack[sp++] = a / b;
-          }
+          stack[sp++] = a / b;
           break;
         }
         case PSG_OP_MOD: {
           float b = stack[--sp];
           float a = stack[--sp];
-          if (fabsf(b) < 1e-6f) {
-            stack[sp++] = 0.0f;
-          } else {
-            stack[sp++] = fmodf(a, b);
-          }
+          stack[sp++] = fmodf(a, b);
           break;
         }
         case PSG_OP_NEG: {
@@ -782,6 +801,11 @@ Positions evalPatternScript(const PatternScript &ps, PatternScriptRuntime &rt, c
         case PSG_OP_COS: {
           float a = stack[--sp];
           stack[sp++] = cosf(degToRad(a));
+          break;
+        }
+        case PSG_OP_TAN: {
+          float a = stack[--sp];
+          stack[sp++] = tanf(degToRad(a));
           break;
         }
         case PSG_OP_ABS: {
@@ -819,18 +843,88 @@ Positions evalPatternScript(const PatternScript &ps, PatternScriptRuntime &rt, c
           stack[sp++] = outVal;
           break;
         }
+        case PSG_OP_MIN: {
+          float b = stack[--sp];
+          float a = stack[--sp];
+          stack[sp++] = fminf(a, b);
+          break;
+        }
+        case PSG_OP_MAX: {
+          float b = stack[--sp];
+          float a = stack[--sp];
+          stack[sp++] = fmaxf(a, b);
+          break;
+        }
+        case PSG_OP_POW: {
+          float b = stack[--sp];
+          float a = stack[--sp];
+          stack[sp++] = powf(a, b);
+          break;
+        }
+        case PSG_OP_SQRT: {
+          float a = stack[--sp];
+          stack[sp++] = sqrtf(a);
+          break;
+        }
+        case PSG_OP_EXP: {
+          float a = stack[--sp];
+          stack[sp++] = expf(a);
+          break;
+        }
+        case PSG_OP_FLOOR: {
+          float a = stack[--sp];
+          stack[sp++] = floorf(a);
+          break;
+        }
+        case PSG_OP_CEIL: {
+          float a = stack[--sp];
+          stack[sp++] = ceilf(a);
+          break;
+        }
+        case PSG_OP_ROUND: {
+          float a = stack[--sp];
+          stack[sp++] = roundf(a);
+          break;
+        }
+        case PSG_OP_RANDOM: {
+          if (!rt.randomInitialized) {
+#if defined(ARDUINO_ARCH_ESP32)
+            uint32_t seed = esp_random();
+#else
+            uint32_t seed = (uint32_t)random();
+#endif
+            if (seed == 0) {
+              seed = ((uint32_t)millis() << 16) ^ (uint32_t)current.radial ^ 0xA5A5A5A5u;
+            }
+            rt.randomState = seed;
+            rt.randomInitialized = true;
+          }
+          rt.randomState = psgRandomNext(rt.randomState);
+          float out = (rt.randomState >> 8) * (1.0f / 16777216.0f);
+          stack[sp++] = out;
+          break;
+        }
         default:
           break;
       }
     }
     float value = (sp > 0) ? stack[sp - 1] : 0.0f;
-    if (isnan(value) || isinf(value)) {
-      value = 0.0f;
-    }
     vars[assign.target] = value;
   }
 
-  rt.stepCounter++;
+  uint8_t faultMask = 0;
+  if (ps.usedMask & PSG_MASK_NEXT_RADIUS) {
+    if (!isfinite(vars[PSG_VAR_NEXT_RADIUS])) faultMask |= PSG_MASK_NEXT_RADIUS;
+  }
+  if (ps.usedMask & PSG_MASK_DELTA_RADIUS) {
+    if (!isfinite(vars[PSG_VAR_DELTA_RADIUS])) faultMask |= PSG_MASK_DELTA_RADIUS;
+  }
+  if (ps.usedMask & PSG_MASK_NEXT_ANGLE) {
+    if (!isfinite(vars[PSG_VAR_NEXT_ANGLE])) faultMask |= PSG_MASK_NEXT_ANGLE;
+  }
+  if (ps.usedMask & PSG_MASK_DELTA_ANGLE) {
+    if (!isfinite(vars[PSG_VAR_DELTA_ANGLE])) faultMask |= PSG_MASK_DELTA_ANGLE;
+  }
 
   float outRadius = radiusCm;
   if (ps.usedMask & PSG_MASK_NEXT_RADIUS) {
@@ -845,16 +939,37 @@ Positions evalPatternScript(const PatternScript &ps, PatternScriptRuntime &rt, c
     outAngle = angleDeg + vars[PSG_VAR_DELTA_ANGLE];
   }
 
+  if (!isfinite(outRadius)) {
+    if (ps.usedMask & PSG_MASK_NEXT_RADIUS) faultMask |= PSG_MASK_NEXT_RADIUS;
+    else if (ps.usedMask & PSG_MASK_DELTA_RADIUS) faultMask |= PSG_MASK_DELTA_RADIUS;
+  }
+  if (!isfinite(outAngle)) {
+    if (ps.usedMask & PSG_MASK_NEXT_ANGLE) faultMask |= PSG_MASK_NEXT_ANGLE;
+    else if (ps.usedMask & PSG_MASK_DELTA_ANGLE) faultMask |= PSG_MASK_DELTA_ANGLE;
+  }
+
+  if (faultMask != 0) {
+    rt.faulted = true;
+    rt.faultMask = faultMask;
+    return result;
+  }
+
+  rt.stepCounter++;
+
   outRadius = clampf(outRadius, 0.0f, maxRadiusCm);
   outAngle = wrapDeg(outAngle);
 
   float radialSteps = outRadius * stepsPerCm;
   float angularSteps = outAngle * stepsPerDeg;
-  if (isnan(radialSteps) || isinf(radialSteps)) {
-    radialSteps = (float)current.radial;
+  if (!isfinite(radialSteps)) {
+    rt.faulted = true;
+    rt.faultMask = (ps.usedMask & PSG_MASK_NEXT_RADIUS) ? (uint8_t)PSG_MASK_NEXT_RADIUS : (ps.usedMask & PSG_MASK_DELTA_RADIUS) ? (uint8_t)PSG_MASK_DELTA_RADIUS : 0;
+    return result;
   }
-  if (isnan(angularSteps) || isinf(angularSteps)) {
-    angularSteps = (float)current.angular;
+  if (!isfinite(angularSteps)) {
+    rt.faulted = true;
+    rt.faultMask = (ps.usedMask & PSG_MASK_NEXT_ANGLE) ? (uint8_t)PSG_MASK_NEXT_ANGLE : (ps.usedMask & PSG_MASK_DELTA_ANGLE) ? (uint8_t)PSG_MASK_DELTA_ANGLE : rt.faultMask;
+    return result;
   }
 
   result.radial = (int)lroundf(radialSteps);
