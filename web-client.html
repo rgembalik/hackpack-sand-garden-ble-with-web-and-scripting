@@ -819,6 +819,18 @@ next_angle = angle + 15.0`
           },
           {
             final: true,
+            name: 'A Cat',
+            description: 'Cat rotating in the sand.',
+            code: `a1 = (angle + rev * 5) % 360
+ear_angle = pingpong(a1 - 90, 180)
+
+ears = clamp(1 - abs(ear_angle - 30) / 15, 0, 1)
+next_radius = 5 + sin(a1) * 2 + ears *2
+
+delta_angle = 1`
+          },
+          {
+            final: true,
             name: 'Butterfly',
             description: 'Fluttering butterfly motif driven by layered sine waves.',
             code: `# Nice butterfly effect
